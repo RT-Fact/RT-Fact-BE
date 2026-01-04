@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ====================================
+// 1. 사용자 (User)
+// ====================================
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  name       String?
+  provider   String   // google, github
+  providerId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  factChecks    FactCheck[]
+  domainFilters DomainFilter[]
+}
+
+// ====================================
+// 2. 도메인 필터 (화이트/블랙리스트)
+// ====================================
+model DomainFilter {
+  id        Int      @id @default(autoincrement())
+  domain    String
+  listType  ListType // WHITE, BLACK
+  createdAt DateTime @default(now())
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 유저당 도메인 중복 방지
+  @@unique([userId, domain])
+}
+
+// ====================================
+// 3. 팩트체크 (FactCheck)
+// ====================================
+model FactCheck {
+  id           String   @id @default(uuid())
+  title        String
+  originalText String   @db.Text
+  checkedCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sentences Sentence[]
+}
+
+// ====================================
+// 4. 문장 (Sentence) - position 방식
+// ====================================
+model Sentence {
+  id       Int          @id @default(autoincrement())
+  type     SentenceType // CLAIM, OPINION (EXCLUDED는 저장 안 함)
+  text     String       @db.Text
+  position Int          // 문장 순서 (0부터 시작)
+
+  // 판정 결과 (CLAIM만 해당)
+  verdict    Verdict?
+  suggestion String?      @db.Text
+  status     ClaimStatus? @default(PENDING)
+
+  // 출처 및 의견 이유
+  sources Json?   // [{ title, url, snippet }, ...]
+  reason  String? // OPINION인 경우 분류 이유
+
+  // Relations
+  factCheckId String
+  factCheck   FactCheck @relation(fields: [factCheckId], references: [id], onDelete: Cascade)
+
+  @@index([factCheckId, position])
+}
+
+// ====================================
+// 5. Enums
+// ====================================
+enum ListType {
+  WHITE
+  BLACK
+}
+
+enum SentenceType {
+  CLAIM
+  OPINION
+  // EXCLUDED는 BE에서 필터링, DB 저장 안 함
+}
+
+enum Verdict {
+  TRUE
+  FALSE
+}
+
+enum ClaimStatus {
+  PENDING
+  APPLIED
+  IGNORED
+}
