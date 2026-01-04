@@ -1,5 +1,5 @@
 dist
 node_modules
 pnpm-lock.yaml
-docker-compose.yml
+docker-compose.yaml
 *.md
