@@ -46,9 +46,6 @@ describe("AuthController (e2e)", () => {
       const tokens = authService.generateTokens(user.id, user.email);
       const refreshToken = tokens.refreshToken;
 
-      // iat(발급시간) 변경을 위해 1초 대기 (JWT는 초 단위 기록)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
       // 3. 갱신 요청
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const response = await request(app.getHttpServer())
