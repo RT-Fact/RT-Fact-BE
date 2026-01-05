@@ -1,6 +1,9 @@
+import { CacheModule } from "@nestjs/cache-manager";
 import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
+import { redisStore } from "cache-manager-redis-yet";
 import { PrismaModule } from "../prisma/prisma.module";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
@@ -11,6 +14,16 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
   imports: [
     PassportModule.register({ defaultStrategy: "jwt" }),
     JwtModule.register({}),
+    CacheModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        store: await redisStore({
+          url: configService.getOrThrow<string>("REDIS_URL"),
+          ttl: 60000,
+        }),
+      }),
+    }),
     PrismaModule,
   ],
   controllers: [AuthController],

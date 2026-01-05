@@ -84,4 +84,13 @@ export class AuthService {
       throw new UnauthorizedException("Invalid refresh token");
     }
   }
+
+  /**
+   * ID로 사용자 조회
+   */
+  async findUserById(userId: string) {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+  }
 }

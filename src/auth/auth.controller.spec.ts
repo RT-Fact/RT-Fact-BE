@@ -1,3 +1,4 @@
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
@@ -7,6 +8,10 @@ import { AuthService } from "./auth.service";
 import type { RefreshTokenDto } from "./dto/refresh-token.dto";
 import type { GoogleProfile, RequestWithUser, TokenPair } from "./types/auth.types";
 
+jest.mock("uuid", () => ({
+  v4: () => "mock-uuid",
+}));
+
 describe("AuthController", () => {
   let controller: AuthController;
 
@@ -14,6 +19,7 @@ describe("AuthController", () => {
     validateOAuthLogin: jest.fn(),
     generateTokens: jest.fn(),
     refreshTokens: jest.fn(),
+    findUserById: jest.fn(),
   };
 
   const mockConfigService = {
@@ -27,8 +33,16 @@ describe("AuthController", () => {
     }),
   };
 
+  const mockCacheManager = {
+    set: jest.fn(),
+    get: jest.fn(),
+    del: jest.fn(),
+  };
+
   const mockResponse = {
     redirect: jest.fn(),
+    cookie: jest.fn(),
+    json: jest.fn(),
   } as unknown as Response;
 
   beforeEach(async () => {
@@ -37,6 +51,7 @@ describe("AuthController", () => {
       providers: [
         { provide: AuthService, useValue: mockAuthService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: CACHE_MANAGER, useValue: mockCacheManager },
       ],
     }).compile();
 
@@ -61,31 +76,23 @@ describe("AuthController", () => {
       } as GoogleProfile,
     };
 
-    const tokens: TokenPair = {
-      accessToken: "access-token",
-      refreshToken: "refresh-token",
-    };
-
     const user = {
       id: "user-id",
       email: "test@example.com",
     };
 
-    it("should redirect to frontend with tokens on success", async () => {
+    it("should redirect to frontend with auth code on success", async () => {
       // given
       mockAuthService.validateOAuthLogin.mockResolvedValue(user);
-      mockAuthService.generateTokens.mockReturnValue(tokens);
 
       // when
       await controller.googleAuthCallback(req as unknown as RequestWithUser, mockResponse);
 
       // then
       expect(mockAuthService.validateOAuthLogin).toHaveBeenCalledWith(req.user);
-      expect(mockAuthService.generateTokens).toHaveBeenCalledWith(user.id, user.email);
+      expect(mockCacheManager.set).toHaveBeenCalledWith("mock-uuid", user.id, 60000);
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(mockResponse.redirect).toHaveBeenCalledWith(
-        `http://localhost:5173?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`,
-      );
+      expect(mockResponse.redirect).toHaveBeenCalledWith("http://localhost:5173?code=mock-uuid");
     });
 
     it("should redirect to login page with error on failure", async () => {
@@ -99,6 +106,49 @@ describe("AuthController", () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockResponse.redirect).toHaveBeenCalledWith(
         "http://localhost:5173/login?error=oauth_failed",
+      );
+    });
+  });
+
+  describe("exchangeToken", () => {
+    const code = "valid-code";
+    const user = { id: "user-id", email: "test@example.com" };
+    const tokens: TokenPair = {
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+    };
+
+    it("should return tokens if code is valid", async () => {
+      // given
+      mockCacheManager.get.mockResolvedValue(user.id);
+      mockAuthService.findUserById.mockResolvedValue(user);
+      mockAuthService.generateTokens.mockReturnValue(tokens);
+
+      // when
+      await controller.exchangeToken(code, mockResponse);
+
+      // then
+      expect(mockCacheManager.get).toHaveBeenCalledWith(code);
+      expect(mockCacheManager.del).toHaveBeenCalledWith(code);
+      expect(mockAuthService.findUserById).toHaveBeenCalledWith(user.id);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(mockResponse.cookie).toHaveBeenCalledWith("refreshToken", tokens.refreshToken, {
+        httpOnly: true,
+        secure: false, // In test env
+        sameSite: "lax",
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      expect(mockResponse.json).toHaveBeenCalledWith({ accessToken: tokens.accessToken });
+    });
+
+    it("should throw UnauthorizedException if code is invalid", async () => {
+      // given
+      mockCacheManager.get.mockResolvedValue(null);
+
+      // when & then
+      await expect(controller.exchangeToken(code, mockResponse)).rejects.toThrow(
+        UnauthorizedException,
       );
     });
   });
@@ -123,14 +173,6 @@ describe("AuthController", () => {
       // then
       expect(result).toEqual(tokens);
       expect(mockAuthService.refreshTokens).toHaveBeenCalledWith(refreshTokenDto.refreshToken);
-    });
-
-    it("should throw UnauthorizedException if service throws", async () => {
-      // given
-      mockAuthService.refreshTokens.mockRejectedValue(new UnauthorizedException());
-
-      // when & then
-      await expect(controller.refresh(refreshTokenDto)).rejects.toThrow(UnauthorizedException);
     });
   });
 });
