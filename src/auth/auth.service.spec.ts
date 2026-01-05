@@ -1,16 +1,13 @@
 import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { Test, TestingModule } from "@nestjs/testing";
-
+import { Test, type TestingModule } from "@nestjs/testing";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthService } from "./auth.service";
-import { GoogleProfile, JwtPayload } from "./types/auth.types";
+import type { GoogleProfile, JwtPayload } from "./types/auth.types";
 
 describe("AuthService", () => {
   let service: AuthService;
-  let prismaService: PrismaService;
-  let jwtService: JwtService;
 
   // Mock 객체들
   const mockPrismaService = {
@@ -50,8 +47,6 @@ describe("AuthService", () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
-    prismaService = module.get<PrismaService>(PrismaService);
-    jwtService = module.get<JwtService>(JwtService);
   });
 
   afterEach(() => {
@@ -125,7 +120,10 @@ describe("AuthService", () => {
     it("should return new tokens if refresh token is valid", async () => {
       // given
       mockJwtService.verify.mockReturnValue(payload);
-      mockPrismaService.user.findUnique.mockResolvedValue({ id: "user-id", email: "test@example.com" });
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: "user-id",
+        email: "test@example.com",
+      });
       mockJwtService.sign.mockReturnValue("new-mock-token");
 
       // when
@@ -145,9 +143,7 @@ describe("AuthService", () => {
       });
 
       // when & then
-      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
     });
 
     it("should throw UnauthorizedException if user not found", async () => {
@@ -156,9 +152,7 @@ describe("AuthService", () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
 
       // when & then
-      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
     });
   });
 });

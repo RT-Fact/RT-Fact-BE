@@ -1,3 +1,5 @@
+import type { Request } from "express";
+
 /**
  * JWT 페이로드 구조
  */
@@ -22,4 +24,11 @@ export interface GoogleProfile {
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
+}
+
+/**
+ * 인증된 사용자 정보가 포함된 Request 객체
+ */
+export interface RequestWithUser extends Request {
+  user: GoogleProfile;
 }

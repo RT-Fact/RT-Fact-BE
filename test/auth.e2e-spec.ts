@@ -1,7 +1,6 @@
-import { INestApplication } from "@nestjs/common";
-import { Test, TestingModule } from "@nestjs/testing";
+import type { INestApplication } from "@nestjs/common";
+import { Test, type TestingModule } from "@nestjs/testing";
 import request from "supertest";
-
 import { AppModule } from "../src/app.module";
 import { AuthService } from "../src/auth/auth.service";
 import { PrismaService } from "../src/prisma/prisma.service";
@@ -51,6 +50,7 @@ describe("AuthController (e2e)", () => {
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // 3. 갱신 요청
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const response = await request(app.getHttpServer())
         .post("/auth/refresh")
         .send({ refreshToken })
@@ -60,10 +60,11 @@ describe("AuthController (e2e)", () => {
       expect(response.body).toHaveProperty("accessToken");
       expect(response.body).toHaveProperty("refreshToken");
       // 새로운 토큰은 이전 토큰과 달라야 함
-      expect(response.body.refreshToken).not.toBe(refreshToken);
+      expect((response.body as Record<string, string>).refreshToken).not.toBe(refreshToken);
     });
 
     it("should return 401 with invalid refresh token", async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await request(app.getHttpServer())
         .post("/auth/refresh")
         .send({ refreshToken: "invalid-token" })

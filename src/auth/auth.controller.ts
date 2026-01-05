@@ -1,24 +1,10 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Req,
-  Res,
-  UnauthorizedException,
-  UseGuards,
-} from "@nestjs/common";
+import { Body, Controller, Get, Post, Req, Res, UseGuards } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AuthGuard } from "@nestjs/passport";
 import type { Response } from "express";
-
 import { AuthService } from "./auth.service";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
-import { GoogleProfile } from "./types/auth.types";
-
-interface RequestWithUser extends Request {
-  user: GoogleProfile;
-}
+import { RequestWithUser } from "./types/auth.types";
 
 @Controller("auth")
 export class AuthController {

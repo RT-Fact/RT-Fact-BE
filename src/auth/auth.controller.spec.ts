@@ -1,17 +1,14 @@
 import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Test, TestingModule } from "@nestjs/testing";
-import { Response } from "express";
-
+import { Test, type TestingModule } from "@nestjs/testing";
+import type { Response } from "express";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
-import { RefreshTokenDto } from "./dto/refresh-token.dto";
-import { GoogleProfile, TokenPair } from "./types/auth.types";
+import type { RefreshTokenDto } from "./dto/refresh-token.dto";
+import type { GoogleProfile, RequestWithUser, TokenPair } from "./types/auth.types";
 
 describe("AuthController", () => {
   let controller: AuthController;
-  let authService: AuthService;
-  let configService: ConfigService;
 
   const mockAuthService = {
     validateOAuthLogin: jest.fn(),
@@ -44,8 +41,6 @@ describe("AuthController", () => {
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
-    authService = module.get<AuthService>(AuthService);
-    configService = module.get<ConfigService>(ConfigService);
   });
 
   afterEach(() => {
@@ -82,13 +77,14 @@ describe("AuthController", () => {
       mockAuthService.generateTokens.mockReturnValue(tokens);
 
       // when
-      await controller.googleAuthCallback(req as any, mockResponse);
+      await controller.googleAuthCallback(req as unknown as RequestWithUser, mockResponse);
 
       // then
       expect(mockAuthService.validateOAuthLogin).toHaveBeenCalledWith(req.user);
       expect(mockAuthService.generateTokens).toHaveBeenCalledWith(user.id, user.email);
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockResponse.redirect).toHaveBeenCalledWith(
-        `http://localhost:5173?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`
+        `http://localhost:5173?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`,
       );
     });
 
@@ -97,11 +93,12 @@ describe("AuthController", () => {
       mockAuthService.validateOAuthLogin.mockRejectedValue(new Error("Auth failed"));
 
       // when
-      await controller.googleAuthCallback(req as any, mockResponse);
+      await controller.googleAuthCallback(req as unknown as RequestWithUser, mockResponse);
 
       // then
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(mockResponse.redirect).toHaveBeenCalledWith(
-        "http://localhost:5173/login?error=oauth_failed"
+        "http://localhost:5173/login?error=oauth_failed",
       );
     });
   });
@@ -133,9 +130,7 @@ describe("AuthController", () => {
       mockAuthService.refreshTokens.mockRejectedValue(new UnauthorizedException());
 
       // when & then
-      await expect(controller.refresh(refreshTokenDto)).rejects.toThrow(
-        UnauthorizedException
-      );
+      await expect(controller.refresh(refreshTokenDto)).rejects.toThrow(UnauthorizedException);
     });
   });
 });

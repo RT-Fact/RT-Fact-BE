@@ -21,12 +21,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, "google") {
    * @param profile - Google 사용자 프로필 정보
    * @param done - Passport 콜백 함수
    */
-  async validate(
+  validate(
     _accessToken: string,
     _refreshToken: string,
     profile: Profile,
     done: VerifyCallback,
-  ): Promise<void> {
+  ): void {
     const { id, displayName, emails } = profile;
 
     const user = {
