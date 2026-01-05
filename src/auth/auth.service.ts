@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
+import { v4 as uuidv4 } from "uuid";
 import { PrismaService } from "../prisma/prisma.service";
 import { GoogleProfile, JwtPayload, TokenPair } from "./types/auth.types";
 
@@ -45,7 +46,7 @@ export class AuthService {
    * - Refresh Token: 7일 만료
    */
   generateTokens(userId: string, email: string): TokenPair {
-    const payload: JwtPayload = { id: userId, email };
+    const payload: JwtPayload = { id: userId, email, jti: uuidv4() };
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.getOrThrow<string>("JWT_SECRET"),

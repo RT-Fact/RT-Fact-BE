@@ -59,7 +59,8 @@ describe("AuthController (e2e)", () => {
       // 4. 검증
       expect(response.body).toHaveProperty("accessToken");
       expect(response.body).toHaveProperty("refreshToken");
-      // 새로운 토큰은 이전 토큰과 달라야 함
+      
+      // 새로운 토큰은 이전 토큰과 달라야 함 (JTI 덕분에 항상 다름을 보장)
       expect((response.body as Record<string, string>).refreshToken).not.toBe(refreshToken);
     });
 
