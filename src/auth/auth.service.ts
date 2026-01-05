@@ -19,23 +19,22 @@ export class AuthService {
   async validateOAuthLogin(profile: GoogleProfile) {
     const { email, name, provider, providerId } = profile;
 
-    let user = await this.prisma.user.findFirst({
+    const user = await this.prisma.user.upsert({
       where: {
+        email,
+      },
+      update: {
+        name,
+        provider,
+        providerId,
+      },
+      create: {
+        email,
+        name,
         provider,
         providerId,
       },
     });
-
-    if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          email,
-          name,
-          provider,
-          providerId,
-        },
-      });
-    }
 
     return user;
   }

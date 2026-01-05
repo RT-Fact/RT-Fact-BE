@@ -15,6 +15,7 @@ describe("AuthService", () => {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
+      upsert: jest.fn(),
     },
   };
 
@@ -65,33 +66,23 @@ describe("AuthService", () => {
       providerId: "123",
     };
 
-    it("should return existing user if found", async () => {
+    it("should return user (create or update) using upsert", async () => {
       // given
-      mockPrismaService.user.findFirst.mockResolvedValue(profile);
+      mockPrismaService.user.upsert.mockResolvedValue(profile);
 
       // when
       const result = await service.validateOAuthLogin(profile);
 
       // then
       expect(result).toEqual(profile);
-      expect(mockPrismaService.user.findFirst).toHaveBeenCalledWith({
-        where: { provider: "google", providerId: "123" },
-      });
-      expect(mockPrismaService.user.create).not.toHaveBeenCalled();
-    });
-
-    it("should create and return new user if not found", async () => {
-      // given
-      mockPrismaService.user.findFirst.mockResolvedValue(null);
-      mockPrismaService.user.create.mockResolvedValue(profile);
-
-      // when
-      const result = await service.validateOAuthLogin(profile);
-
-      // then
-      expect(result).toEqual(profile);
-      expect(mockPrismaService.user.create).toHaveBeenCalledWith({
-        data: profile,
+      expect(mockPrismaService.user.upsert).toHaveBeenCalledWith({
+        where: { email: profile.email },
+        update: {
+          name: profile.name,
+          provider: profile.provider,
+          providerId: profile.providerId,
+        },
+        create: profile,
       });
     });
   });
