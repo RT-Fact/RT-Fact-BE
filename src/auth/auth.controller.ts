@@ -131,4 +131,31 @@ export class AuthController {
       isGuest: true,
     };
   }
+
+  /**
+   * GET /auth/me
+   * 현재 인증된 사용자/게스트 정보 반환
+   */
+  @Get("me")
+  @UseGuards(AuthGuard("jwt"))
+  async me(
+    @Req() req: { user: { userId?: string; email?: string; ip?: string; isGuest: boolean } },
+  ) {
+    const { user } = req;
+
+    if (user.isGuest) {
+      const guestInfo = await this.authService.getOrCreateGuest(user.ip!);
+
+      return {
+        isGuest: true,
+        remainingUses: guestInfo.remainingUses,
+      };
+    }
+
+    return {
+      isGuest: false,
+      userId: user.userId,
+      email: user.email,
+    };
+  }
 }
