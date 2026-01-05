@@ -85,7 +85,7 @@ export class AuthController {
       throw new UnauthorizedException("User not found");
     }
 
-    const tokens = this.authService.generateTokens(user.id, user.email);
+    const tokens = this.authService.generateUserTokens(user.id, user.email);
 
     // Refresh Token을 HttpOnly Cookie로 설정
     res.cookie("refreshToken", tokens.refreshToken, {

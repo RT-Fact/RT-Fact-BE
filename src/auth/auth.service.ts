@@ -44,7 +44,7 @@ export class AuthService {
    * - Access Token: 1시간 만료
    * - Refresh Token: 7일 만료
    */
-  generateTokens(userId: string, email: string): TokenPair {
+  generateUserTokens(userId: string, email: string): TokenPair {
     const payload: UserJwtPayload = { id: userId, email, jti: uuidv4() };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -78,7 +78,7 @@ export class AuthService {
         throw new UnauthorizedException("User not found");
       }
 
-      return this.generateTokens(user.id, user.email);
+      return this.generateUserTokens(user.id, user.email);
     } catch {
       throw new UnauthorizedException("Invalid refresh token");
     }

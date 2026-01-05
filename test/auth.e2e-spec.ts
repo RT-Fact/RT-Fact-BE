@@ -145,7 +145,7 @@ describe("AuthController (e2e)", () => {
       });
 
       // 2. 유효한 Refresh Token 생성
-      const tokens = authService.generateTokens(user.id, user.email);
+      const tokens = authService.generateUserTokens(user.id, user.email);
       const refreshToken = tokens.refreshToken;
 
       // 3. 갱신 요청

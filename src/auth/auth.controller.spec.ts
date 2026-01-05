@@ -17,7 +17,7 @@ describe("AuthController", () => {
 
   const mockAuthService = {
     validateOAuthLogin: jest.fn(),
-    generateTokens: jest.fn(),
+    generateUserTokens: jest.fn(),
     refreshTokens: jest.fn(),
     findUserById: jest.fn(),
   };
@@ -122,7 +122,7 @@ describe("AuthController", () => {
       // given
       mockCacheManager.get.mockResolvedValue(user.id);
       mockAuthService.findUserById.mockResolvedValue(user);
-      mockAuthService.generateTokens.mockReturnValue(tokens);
+      mockAuthService.generateUserTokens.mockReturnValue(tokens);
 
       // when
       await controller.exchangeToken(code, mockResponse);

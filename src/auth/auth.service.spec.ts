@@ -87,13 +87,13 @@ describe("AuthService", () => {
     });
   });
 
-  describe("generateTokens", () => {
+  describe("generateUserTokens", () => {
     it("should return access and refresh tokens", () => {
       // given
       mockJwtService.sign.mockReturnValue("mock-token");
 
       // when
-      const result = service.generateTokens("user-id", "test@example.com");
+      const result = service.generateUserTokens("user-id", "test@example.com");
 
       // then
       expect(result).toEqual({
