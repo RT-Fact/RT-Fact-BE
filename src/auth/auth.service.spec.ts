@@ -4,6 +4,7 @@ import { JwtService } from "@nestjs/jwt";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthService } from "./auth.service";
+import { GuestRepository } from "./repositories/guest.repository";
 import type { GoogleProfile, UserJwtPayload } from "./types/auth.types";
 
 describe("AuthService", () => {
@@ -37,6 +38,11 @@ describe("AuthService", () => {
     }),
   };
 
+  const mockGuestRepository = {
+    getGuestInfo: jest.fn(),
+    setGuestInfo: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,6 +50,7 @@ describe("AuthService", () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: GuestRepository, useValue: mockGuestRepository },
       ],
     }).compile();
 

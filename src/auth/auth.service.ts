@@ -3,7 +3,10 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { v4 as uuidv4 } from "uuid";
 import { PrismaService } from "../prisma/prisma.service";
+import { GuestRepository } from "./repositories/guest.repository";
 import { GoogleProfile, GuestJwtPayload, TokenPair, UserJwtPayload } from "./types/auth.types";
+
+// TODO: 상수들 어떻게 관리할지 결정을 내려야겠다.
 
 @Injectable()
 export class AuthService {
@@ -11,6 +14,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly guestRepository: GuestRepository,
   ) {}
 
   /**
@@ -71,6 +75,21 @@ export class AuthService {
       secret: this.configService.getOrThrow<string>("JWT_SECRET"),
       expiresIn: "7d",
     });
+  }
+
+  /**
+   * 게스트 정보 조회 또는 생성
+   */
+  async getOrCreateGuest(ip: string) {
+    const existing = await this.guestRepository.getGuestInfo(ip);
+
+    if (existing) return existing;
+
+    const newGuest = { remainingUses: 3, createdAt: Date.now() };
+
+    await this.guestRepository.setGuestInfo(ip, newGuest);
+
+    return newGuest;
   }
 
   /**
