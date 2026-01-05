@@ -1,5 +1,5 @@
 ## 🎫 관련 이슈 (Related Issue)
-- Fixes #
+- Closes #
 
 ## 🛠️ 작업 내용 (Description)
 - AS-IS
