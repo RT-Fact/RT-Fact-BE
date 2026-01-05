@@ -5,8 +5,10 @@ import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import { redisStore } from "cache-manager-redis-yet";
 import { PrismaModule } from "../prisma/prisma.module";
+import { RedisModule } from "../redis/redis.module";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
+import { GuestRepository } from "./repositories/guest.repository";
 import { GoogleStrategy } from "./strategies/google.strategy";
 import { JwtStrategy } from "./strategies/jwt.strategy";
 
@@ -25,9 +27,10 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
       }),
     }),
     PrismaModule,
+    RedisModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, GoogleStrategy, JwtStrategy],
+  providers: [AuthService, GuestRepository, GoogleStrategy, JwtStrategy],
   exports: [AuthService],
 })
 export class AuthModule {}
