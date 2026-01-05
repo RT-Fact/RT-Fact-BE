@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { v4 as uuidv4 } from "uuid";
 import { PrismaService } from "../prisma/prisma.service";
-import { GoogleProfile, TokenPair, UserJwtPayload } from "./types/auth.types";
+import { GoogleProfile, GuestJwtPayload, TokenPair, UserJwtPayload } from "./types/auth.types";
 
 @Injectable()
 export class AuthService {
@@ -58,6 +58,19 @@ export class AuthService {
     });
 
     return { accessToken, refreshToken };
+  }
+
+  /**
+   * 게스트용 Access Token 생성
+   * - 게스트는 Refresh Token 없음 (단기 세션)
+   */
+  generateGuestToken(ip: string): string {
+    const payload: GuestJwtPayload = { ip, isGuest: true, jti: uuidv4() };
+
+    return this.jwtService.sign(payload, {
+      secret: this.configService.getOrThrow<string>("JWT_SECRET"),
+      expiresIn: "7d",
+    });
   }
 
   /**

@@ -104,6 +104,19 @@ describe("AuthService", () => {
     });
   });
 
+  describe("generateGuestToken", () => {
+    it("should return access token", () => {
+      // given
+      mockJwtService.sign.mockReturnValue("mock-guest-token");
+
+      // when
+      const result = service.generateGuestToken("127.0.0.1");
+
+      // then
+      expect(result).toBe("mock-guest-token");
+    });
+  });
+
   describe("refreshTokens", () => {
     const refreshToken = "valid-refresh-token";
     const payload: UserJwtPayload = { id: "user-id", email: "test@example.com" };
