@@ -1,9 +1,9 @@
 import type { Request } from "express";
 
 /**
- * JWT 페이로드 구조
+ * User JWT 페이로드 구조
  */
-export interface JwtPayload {
+export interface UserJwtPayload {
   id: string;
   email: string;
   jti?: string;

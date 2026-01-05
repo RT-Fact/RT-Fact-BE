@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { v4 as uuidv4 } from "uuid";
 import { PrismaService } from "../prisma/prisma.service";
-import { GoogleProfile, JwtPayload, TokenPair } from "./types/auth.types";
+import { GoogleProfile, TokenPair, UserJwtPayload } from "./types/auth.types";
 
 @Injectable()
 export class AuthService {
@@ -45,7 +45,7 @@ export class AuthService {
    * - Refresh Token: 7일 만료
    */
   generateTokens(userId: string, email: string): TokenPair {
-    const payload: JwtPayload = { id: userId, email, jti: uuidv4() };
+    const payload: UserJwtPayload = { id: userId, email, jti: uuidv4() };
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.getOrThrow<string>("JWT_SECRET"),
@@ -66,7 +66,7 @@ export class AuthService {
    */
   async refreshTokens(refreshToken: string): Promise<TokenPair> {
     try {
-      const payload = this.jwtService.verify<JwtPayload>(refreshToken, {
+      const payload = this.jwtService.verify<UserJwtPayload>(refreshToken, {
         secret: this.configService.getOrThrow<string>("JWT_REFRESH_SECRET"),
       });
 

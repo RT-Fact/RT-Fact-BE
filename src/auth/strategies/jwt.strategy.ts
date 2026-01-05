@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
-import { JwtPayload } from "../types/auth.types";
+import { UserJwtPayload } from "../types/auth.types";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
@@ -19,7 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
    * @param payload - JWT 페이로드 (id, email 등)
    * @returns req.user에 저장될 사용자 정보
    */
-  validate(payload: JwtPayload): { userId: string; email: string } {
+  validate(payload: UserJwtPayload): { userId: string; email: string } {
     if (!payload.id || !payload.email) {
       throw new UnauthorizedException("Invalid token payload");
     }

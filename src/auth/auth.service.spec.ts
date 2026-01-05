@@ -4,7 +4,7 @@ import { JwtService } from "@nestjs/jwt";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthService } from "./auth.service";
-import type { GoogleProfile, JwtPayload } from "./types/auth.types";
+import type { GoogleProfile, UserJwtPayload } from "./types/auth.types";
 
 describe("AuthService", () => {
   let service: AuthService;
@@ -106,7 +106,7 @@ describe("AuthService", () => {
 
   describe("refreshTokens", () => {
     const refreshToken = "valid-refresh-token";
-    const payload: JwtPayload = { id: "user-id", email: "test@example.com" };
+    const payload: UserJwtPayload = { id: "user-id", email: "test@example.com" };
 
     it("should return new tokens if refresh token is valid", async () => {
       // given
