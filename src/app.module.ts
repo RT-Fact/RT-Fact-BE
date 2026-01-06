@@ -20,6 +20,8 @@ import { RedisModule } from "./redis/redis.module";
         // JWT
         JWT_SECRET: Joi.string().required(),
         JWT_REFRESH_SECRET: Joi.string().required(),
+        // IP Hashing
+        IP_SECRET_KEY: Joi.string().length(64).required(),
         // Google OAuth
         GOOGLE_CLIENT_ID: Joi.string().required(),
         GOOGLE_CLIENT_SECRET: Joi.string().required(),
