@@ -1,8 +1,10 @@
+import type { Server } from "http";
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import type { CanActivate, ExecutionContext, INestApplication } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import { Test, type TestingModule } from "@nestjs/testing";
 import type { Cache } from "cache-manager";
-import request from "supertest";
+import request, { type Response } from "supertest";
 import { AppModule } from "../src/app.module";
 import { AuthService } from "../src/auth/auth.service";
 import type { RequestWithUser } from "../src/auth/types/auth.types";
@@ -39,6 +41,15 @@ describe("AuthController (e2e)", () => {
 
     authService = moduleFixture.get<AuthService>(AuthService);
     prismaService = moduleFixture.get<PrismaService>(PrismaService);
+
+    // 테스트 시작 전 기존 데이터 삭제
+    await prismaService.user.deleteMany({
+      where: {
+        email: {
+          in: ["test@example.com", "test-exchange@example.com", "google-flow-user@example.com"],
+        },
+      },
+    });
   });
 
   afterAll(async () => {
@@ -50,14 +61,35 @@ describe("AuthController (e2e)", () => {
         },
       },
     });
+
+    // Redis 연결 종료
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+    const cacheManager: any = app.get(CACHE_MANAGER);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (cacheManager.store && typeof cacheManager.store.client?.quit === "function") {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      await cacheManager.store.client.quit();
+    }
+
+    await prismaService.$disconnect();
     await app.close();
+  });
+
+  beforeEach(async () => {
+    // 각 테스트 실행 전 데이터 정리
+    await prismaService.user.deleteMany({
+      where: {
+        email: {
+          in: ["test@example.com", "test-exchange@example.com", "google-flow-user@example.com"],
+        },
+      },
+    });
   });
 
   describe("Full OAuth Flow: Callback -> Code -> Token", () => {
     it("should handle full flow: login callback -> redirect with code -> exchange -> tokens", async () => {
       // 1. GET /auth/google/callback 요청 (Mock Guard가 user 주입)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      const callbackResponse = await request(app.getHttpServer())
+      const callbackResponse: Response = await request(app.getHttpServer() as Server)
         .get("/auth/google/callback")
         .expect(302); // Redirect
 
@@ -71,8 +103,7 @@ describe("AuthController (e2e)", () => {
       expect(code).toBeTruthy();
 
       // 3. 추출한 코드로 교환 요청 (POST /auth/token)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      const exchangeResponse = await request(app.getHttpServer())
+      const exchangeResponse: Response = await request(app.getHttpServer() as Server)
         .post("/auth/token")
         .send({ code })
         .expect(201);
@@ -114,8 +145,7 @@ describe("AuthController (e2e)", () => {
       await cacheManager.set(code, user.id, 60000);
 
       // 3. 교환 요청
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      const response = await request(app.getHttpServer())
+      const response: Response = await request(app.getHttpServer() as Server)
         .post("/auth/token")
         .send({ code })
         .expect(201);
@@ -124,8 +154,7 @@ describe("AuthController (e2e)", () => {
     });
 
     it("should fail with invalid code", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      await request(app.getHttpServer())
+      await request(app.getHttpServer() as Server)
         .post("/auth/token")
         .send({ code: "invalid-code" })
         .expect(401);
@@ -149,8 +178,7 @@ describe("AuthController (e2e)", () => {
       const refreshToken = tokens.refreshToken;
 
       // 3. 갱신 요청
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      const response = await request(app.getHttpServer())
+      const response: Response = await request(app.getHttpServer() as Server)
         .post("/auth/refresh")
         .send({ refreshToken })
         .expect(201);
@@ -162,8 +190,7 @@ describe("AuthController (e2e)", () => {
     });
 
     it("should return 401 with invalid refresh token", async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      await request(app.getHttpServer())
+      await request(app.getHttpServer() as Server)
         .post("/auth/refresh")
         .send({ refreshToken: "invalid-token" })
         .expect(401);

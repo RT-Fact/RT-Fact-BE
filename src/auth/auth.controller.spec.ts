@@ -15,14 +15,21 @@ jest.mock("uuid", () => ({
 describe("AuthController", () => {
   let controller: AuthController;
 
-  const mockAuthService = {
-    validateOAuthLogin: jest.fn(),
-    generateUserTokens: jest.fn(),
-    refreshTokens: jest.fn(),
-    findUserById: jest.fn(),
-    getOrCreateGuest: jest.fn(),
-    generateGuestToken: jest.fn(),
-  };
+  let mockValidateOAuthLogin: jest.Mock;
+  let mockGenerateUserTokens: jest.Mock;
+  let mockRefreshTokens: jest.Mock;
+  let mockFindUserById: jest.Mock;
+  let mockGetOrCreateGuest: jest.Mock;
+  let mockGenerateGuestToken: jest.Mock;
+
+  let mockCacheSet: jest.Mock;
+  let mockCacheGet: jest.Mock;
+  let mockCacheDel: jest.Mock;
+
+  let mockRedirect: jest.Mock;
+  let mockCookie: jest.Mock;
+  let mockJson: jest.Mock;
+  let mockResponse: Response;
 
   const mockConfigService = {
     getOrThrow: jest.fn((key: string) => {
@@ -35,25 +42,50 @@ describe("AuthController", () => {
     }),
   };
 
-  const mockCacheManager = {
-    set: jest.fn(),
-    get: jest.fn(),
-    del: jest.fn(),
-  };
-
-  const mockResponse = {
-    redirect: jest.fn(),
-    cookie: jest.fn(),
-    json: jest.fn(),
-  } as unknown as Response;
-
   beforeEach(async () => {
+    mockValidateOAuthLogin = jest.fn();
+    mockGenerateUserTokens = jest.fn();
+    mockRefreshTokens = jest.fn();
+    mockFindUserById = jest.fn();
+    mockGetOrCreateGuest = jest.fn();
+    mockGenerateGuestToken = jest.fn();
+
+    mockCacheSet = jest.fn();
+    mockCacheGet = jest.fn();
+    mockCacheDel = jest.fn();
+
+    mockRedirect = jest.fn();
+    mockCookie = jest.fn();
+    mockJson = jest.fn();
+    mockResponse = {
+      redirect: mockRedirect,
+      cookie: mockCookie,
+      json: mockJson,
+    } as unknown as Response;
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
-        { provide: AuthService, useValue: mockAuthService },
+        {
+          provide: AuthService,
+          useValue: {
+            validateOAuthLogin: mockValidateOAuthLogin,
+            generateUserTokens: mockGenerateUserTokens,
+            refreshTokens: mockRefreshTokens,
+            findUserById: mockFindUserById,
+            getOrCreateGuest: mockGetOrCreateGuest,
+            generateGuestToken: mockGenerateGuestToken,
+          },
+        },
         { provide: ConfigService, useValue: mockConfigService },
-        { provide: CACHE_MANAGER, useValue: mockCacheManager },
+        {
+          provide: CACHE_MANAGER,
+          useValue: {
+            set: mockCacheSet,
+            get: mockCacheGet,
+            del: mockCacheDel,
+          },
+        },
       ],
     }).compile();
 
@@ -85,30 +117,26 @@ describe("AuthController", () => {
 
     it("should redirect to frontend with auth code on success", async () => {
       // given
-      mockAuthService.validateOAuthLogin.mockResolvedValue(user);
+      mockValidateOAuthLogin.mockResolvedValue(user);
 
       // when
       await controller.googleAuthCallback(req as unknown as RequestWithUser, mockResponse);
 
       // then
-      expect(mockAuthService.validateOAuthLogin).toHaveBeenCalledWith(req.user);
-      expect(mockCacheManager.set).toHaveBeenCalledWith("mock-uuid", user.id, 60000);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(mockResponse.redirect).toHaveBeenCalledWith("http://localhost:5173?code=mock-uuid");
+      expect(mockValidateOAuthLogin).toHaveBeenCalledWith(req.user);
+      expect(mockCacheSet).toHaveBeenCalledWith("mock-uuid", user.id, 60000);
+      expect(mockRedirect).toHaveBeenCalledWith("http://localhost:5173?code=mock-uuid");
     });
 
     it("should redirect to login page with error on failure", async () => {
       // given
-      mockAuthService.validateOAuthLogin.mockRejectedValue(new Error("Auth failed"));
+      mockValidateOAuthLogin.mockRejectedValue(new Error("Auth failed"));
 
       // when
       await controller.googleAuthCallback(req as unknown as RequestWithUser, mockResponse);
 
       // then
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(mockResponse.redirect).toHaveBeenCalledWith(
-        "http://localhost:5173/login?error=oauth_failed",
-      );
+      expect(mockRedirect).toHaveBeenCalledWith("http://localhost:5173/login?error=oauth_failed");
     });
   });
 
@@ -122,31 +150,30 @@ describe("AuthController", () => {
 
     it("should return tokens if code is valid", async () => {
       // given
-      mockCacheManager.get.mockResolvedValue(user.id);
-      mockAuthService.findUserById.mockResolvedValue(user);
-      mockAuthService.generateUserTokens.mockReturnValue(tokens);
+      mockCacheGet.mockResolvedValue(user.id);
+      mockFindUserById.mockResolvedValue(user);
+      mockGenerateUserTokens.mockReturnValue(tokens);
 
       // when
       await controller.exchangeToken(code, mockResponse);
 
       // then
-      expect(mockCacheManager.get).toHaveBeenCalledWith(code);
-      expect(mockCacheManager.del).toHaveBeenCalledWith(code);
-      expect(mockAuthService.findUserById).toHaveBeenCalledWith(user.id);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(mockResponse.cookie).toHaveBeenCalledWith("refreshToken", tokens.refreshToken, {
+      expect(mockCacheGet).toHaveBeenCalledWith(code);
+      expect(mockCacheDel).toHaveBeenCalledWith(code);
+      expect(mockFindUserById).toHaveBeenCalledWith(user.id);
+      expect(mockCookie).toHaveBeenCalledWith("refreshToken", tokens.refreshToken, {
         httpOnly: true,
         secure: false, // In test env
         sameSite: "lax",
         path: "/",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
-      expect(mockResponse.json).toHaveBeenCalledWith({ accessToken: tokens.accessToken });
+      expect(mockJson).toHaveBeenCalledWith({ accessToken: tokens.accessToken });
     });
 
     it("should throw UnauthorizedException if code is invalid", async () => {
       // given
-      mockCacheManager.get.mockResolvedValue(null);
+      mockCacheGet.mockResolvedValue(null);
 
       // when & then
       await expect(controller.exchangeToken(code, mockResponse)).rejects.toThrow(
@@ -167,14 +194,14 @@ describe("AuthController", () => {
 
     it("should return new tokens if refresh token is valid", async () => {
       // given
-      mockAuthService.refreshTokens.mockResolvedValue(tokens);
+      mockRefreshTokens.mockResolvedValue(tokens);
 
       // when
       const result = await controller.refresh(refreshTokenDto);
 
       // then
       expect(result).toEqual(tokens);
-      expect(mockAuthService.refreshTokens).toHaveBeenCalledWith(refreshTokenDto.refreshToken);
+      expect(mockRefreshTokens).toHaveBeenCalledWith(refreshTokenDto.refreshToken);
     });
   });
 
@@ -184,14 +211,14 @@ describe("AuthController", () => {
         user: { isGuest: true, ip: "127.0.0.1" },
       };
 
-      mockAuthService.getOrCreateGuest.mockResolvedValue({
+      mockGetOrCreateGuest.mockResolvedValue({
         remainingUses: 3,
         createdAt: Date.now(),
       });
 
       const result = await controller.me(req);
 
-      expect(mockAuthService.getOrCreateGuest).toHaveBeenCalledWith("127.0.0.1");
+      expect(mockGetOrCreateGuest).toHaveBeenCalledWith("127.0.0.1");
       expect(result).toEqual({ isGuest: true, remainingUses: 3 });
     });
 
