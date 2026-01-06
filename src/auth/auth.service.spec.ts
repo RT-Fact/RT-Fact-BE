@@ -4,7 +4,8 @@ import { JwtService } from "@nestjs/jwt";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthService } from "./auth.service";
-import type { GoogleProfile, JwtPayload } from "./types/auth.types";
+import { GuestRepository } from "./repositories/guest.repository";
+import type { GoogleProfile, UserJwtPayload } from "./types/auth.types";
 
 describe("AuthService", () => {
   let service: AuthService;
@@ -37,6 +38,11 @@ describe("AuthService", () => {
     }),
   };
 
+  const mockGuestRepository = {
+    getGuestInfo: jest.fn(),
+    setGuestInfo: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,6 +50,7 @@ describe("AuthService", () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: GuestRepository, useValue: mockGuestRepository },
       ],
     }).compile();
 
@@ -87,13 +94,13 @@ describe("AuthService", () => {
     });
   });
 
-  describe("generateTokens", () => {
+  describe("generateUserTokens", () => {
     it("should return access and refresh tokens", () => {
       // given
       mockJwtService.sign.mockReturnValue("mock-token");
 
       // when
-      const result = service.generateTokens("user-id", "test@example.com");
+      const result = service.generateUserTokens("user-id", "test@example.com");
 
       // then
       expect(result).toEqual({
@@ -104,9 +111,22 @@ describe("AuthService", () => {
     });
   });
 
+  describe("generateGuestToken", () => {
+    it("should return access token", () => {
+      // given
+      mockJwtService.sign.mockReturnValue("mock-guest-token");
+
+      // when
+      const result = service.generateGuestToken("127.0.0.1");
+
+      // then
+      expect(result).toBe("mock-guest-token");
+    });
+  });
+
   describe("refreshTokens", () => {
     const refreshToken = "valid-refresh-token";
-    const payload: JwtPayload = { id: "user-id", email: "test@example.com" };
+    const payload: UserJwtPayload = { id: "user-id", email: "test@example.com" };
 
     it("should return new tokens if refresh token is valid", async () => {
       // given

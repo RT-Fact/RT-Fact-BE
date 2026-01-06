@@ -17,9 +17,11 @@ describe("AuthController", () => {
 
   const mockAuthService = {
     validateOAuthLogin: jest.fn(),
-    generateTokens: jest.fn(),
+    generateUserTokens: jest.fn(),
     refreshTokens: jest.fn(),
     findUserById: jest.fn(),
+    getOrCreateGuest: jest.fn(),
+    generateGuestToken: jest.fn(),
   };
 
   const mockConfigService = {
@@ -122,7 +124,7 @@ describe("AuthController", () => {
       // given
       mockCacheManager.get.mockResolvedValue(user.id);
       mockAuthService.findUserById.mockResolvedValue(user);
-      mockAuthService.generateTokens.mockReturnValue(tokens);
+      mockAuthService.generateUserTokens.mockReturnValue(tokens);
 
       // when
       await controller.exchangeToken(code, mockResponse);
@@ -173,6 +175,38 @@ describe("AuthController", () => {
       // then
       expect(result).toEqual(tokens);
       expect(mockAuthService.refreshTokens).toHaveBeenCalledWith(refreshTokenDto.refreshToken);
+    });
+  });
+
+  describe("me", () => {
+    it("should return guest info if user is guest", async () => {
+      const req: Parameters<typeof controller.me>[0] = {
+        user: { isGuest: true, ip: "127.0.0.1" },
+      };
+
+      mockAuthService.getOrCreateGuest.mockResolvedValue({
+        remainingUses: 3,
+        createdAt: Date.now(),
+      });
+
+      const result = await controller.me(req);
+
+      expect(mockAuthService.getOrCreateGuest).toHaveBeenCalledWith("127.0.0.1");
+      expect(result).toEqual({ isGuest: true, remainingUses: 3 });
+    });
+
+    it("should return user info if user is authenticated", async () => {
+      const req: Parameters<typeof controller.me>[0] = {
+        user: { isGuest: false, userId: "user-id", email: "test@example.com" },
+      };
+
+      const result = await controller.me(req);
+
+      expect(result).toEqual({
+        isGuest: false,
+        userId: "user-id",
+        email: "test@example.com",
+      });
     });
   });
 });

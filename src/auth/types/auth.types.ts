@@ -1,12 +1,29 @@
 import type { Request } from "express";
 
 /**
- * JWT 페이로드 구조
+ * User JWT 페이로드 구조
  */
-export interface JwtPayload {
+export interface UserJwtPayload {
   id: string;
   email: string;
   jti?: string;
+}
+
+/**
+ * Guest JWT 페이로드 구조
+ */
+export interface GuestJwtPayload {
+  ip: string;
+  isGuest: true;
+  jti?: string;
+}
+
+/**
+ * Redis에 저장될 게스트 정보
+ */
+export interface GuestInfo {
+  remainingUses: number;
+  createdAt: number;
 }
 
 /**

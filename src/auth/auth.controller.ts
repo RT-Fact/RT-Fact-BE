@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Inject,
   Post,
   Req,
@@ -85,7 +86,7 @@ export class AuthController {
       throw new UnauthorizedException("User not found");
     }
 
-    const tokens = this.authService.generateTokens(user.id, user.email);
+    const tokens = this.authService.generateUserTokens(user.id, user.email);
 
     // Refresh Token을 HttpOnly Cookie로 설정
     res.cookie("refreshToken", tokens.refreshToken, {
@@ -107,5 +108,54 @@ export class AuthController {
   @Post("refresh")
   async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refreshTokens(refreshTokenDto.refreshToken);
+  }
+
+  /**
+   * POST /auth/guest
+   * 게스트 토큰 발급
+   */
+  @Post("guest")
+  async guest(@Headers("x-forwarded-for") forwardedFor?: string, @Req() req?: { ip?: string }) {
+    // IP 추출: X-Forwarded-For 헤더 또는 Express req.ip
+    const ip = forwardedFor?.split(",")[0].trim() || req?.ip || "unknown";
+
+    // 게스트 정보 조회 또는 생성
+    const guestInfo = await this.authService.getOrCreateGuest(ip);
+
+    // 토큰 발급
+    const accessToken = this.authService.generateGuestToken(ip);
+
+    return {
+      accessToken,
+      remainingUses: guestInfo.remainingUses,
+      isGuest: true,
+    };
+  }
+
+  /**
+   * GET /auth/me
+   * 현재 인증된 사용자/게스트 정보 반환
+   */
+  @Get("me")
+  @UseGuards(AuthGuard("jwt"))
+  async me(
+    @Req() req: { user: { userId?: string; email?: string; ip?: string; isGuest: boolean } },
+  ) {
+    const { user } = req;
+
+    if (user.isGuest) {
+      const guestInfo = await this.authService.getOrCreateGuest(user.ip!);
+
+      return {
+        isGuest: true,
+        remainingUses: guestInfo.remainingUses,
+      };
+    }
+
+    return {
+      isGuest: false,
+      userId: user.userId,
+      email: user.email,
+    };
   }
 }
