@@ -4,6 +4,8 @@ import * as Joi from "joi";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { AuthModule } from "./auth/auth.module";
+import { FactCheckModule } from "./factcheck/factcheck.module";
+import { McpModule } from "./mcp/mcp.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RedisModule } from "./redis/redis.module";
 
@@ -28,11 +30,15 @@ import { RedisModule } from "./redis/redis.module";
         GOOGLE_CALLBACK_URL: Joi.string().uri(),
         // Frontend
         FRONTEND_URL: Joi.string().uri(),
+        // MCP Server
+        MCP_SERVER_URL: Joi.string().uri().required(),
       }),
     }),
     PrismaModule,
     RedisModule,
     AuthModule,
+    McpModule,
+    FactCheckModule,
   ],
   controllers: [AppController],
   providers: [AppService],
