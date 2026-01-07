@@ -9,6 +9,8 @@ export interface GuestUser {
   isGuest: true;
 }
 
+export type RequestUser = AuthenticatedUser | GuestUser;
+
 export interface RequestWithUser {
-  user: AuthenticatedUser | GuestUser;
+  user: RequestUser;
 }

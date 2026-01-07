@@ -12,19 +12,7 @@ import {
   OpinionSentenceResponse,
   SentenceResponse,
 } from "./dto/factcheck-response.dto";
-
-interface AuthenticatedUser {
-  userId: string;
-  email: string;
-  isGuest: false;
-}
-
-interface GuestUser {
-  ip: string;
-  isGuest: true;
-}
-
-type RequestUser = AuthenticatedUser | GuestUser;
+import { RequestUser } from "./types/factcheck.types";
 
 @Injectable()
 export class FactCheckService {
