@@ -27,6 +27,9 @@ export class FactCheckService {
    * 팩트체크 수행
    */
   async processFactCheck(user: RequestUser, text: string): Promise<FactCheckResponse> {
+    const userId = user.isGuest ? `guest:${user.ip}` : user.userId;
+    this.logger.log(`팩트체크 요청 시작 - 사용자: ${userId}, 텍스트 길이: ${text.length}`);
+
     // 1. 빈 텍스트 검증
     if (!text || text.trim().length === 0) {
       throw new BadRequestException("EMPTY_TEXT");
@@ -50,19 +53,31 @@ export class FactCheckService {
 
     // 5. 로그인 사용자: DB 저장
     if (!user.isGuest) {
-      await this.factCheckRepository.saveFactCheck(
-        user.userId,
-        factCheckId,
-        mcpResponse.title,
-        text,
-        sentences,
-      );
+      try {
+        await this.factCheckRepository.saveFactCheck(
+          user.userId,
+          factCheckId,
+          mcpResponse.title,
+          text,
+          sentences,
+        );
+      } catch (error) {
+        this.logger.error(
+          `DB 저장 실패 - 사용자: ${userId}, factCheckId: ${factCheckId}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+        throw error;
+      }
     }
 
     // 6. 게스트: 사용량 차감 (Atomic)
     if (user.isGuest) {
       await this.guestRepository.decrementRemainingUses(user.ip);
     }
+
+    this.logger.log(
+      `팩트체크 완료 - 사용자: ${userId}, 문장 수: ${sentences.length}, 요약: TRUE=${summary.true}, FALSE=${summary.false}, OPINION=${summary.opinion}`,
+    );
 
     return {
       id: factCheckId,

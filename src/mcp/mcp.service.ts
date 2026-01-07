@@ -18,6 +18,9 @@ export class McpService {
    * @throws BadGatewayException MCP 서버 호출 실패 시
    */
   async analyze(text: string): Promise<McpResponse> {
+    const startTime = Date.now();
+    this.logger.log(`MCP 서버 요청 시작 - 텍스트 길이: ${text.length}`);
+
     try {
       const response = await fetch(`${this.mcpServerUrl}/mcp`, {
         method: "POST",
@@ -33,13 +36,19 @@ export class McpService {
       }
 
       const data = (await response.json()) as McpResponse;
+      const elapsedTime = Date.now() - startTime;
+      this.logger.log(
+        `MCP 서버 응답 성공 - 소요 시간: ${elapsedTime}ms, 문장 수: ${data.sentences?.length ?? 0}`,
+      );
+
       return data;
     } catch (error) {
       if (error instanceof BadGatewayException) {
         throw error;
       }
 
-      this.logger.error(`MCP 서버 호출 중 오류 발생: ${error}`);
+      const elapsedTime = Date.now() - startTime;
+      this.logger.error(`MCP 서버 호출 중 오류 발생 (${elapsedTime}ms): ${error}`);
       throw new BadGatewayException("MCP_ERROR");
     }
   }
