@@ -98,7 +98,8 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "clearMocks": true
   },
   "lint-staged": {
     "**/*.{ts,tsx}": [

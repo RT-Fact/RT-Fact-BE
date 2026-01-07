@@ -12,24 +12,31 @@ jest.mock("uuid", () => ({
   v4: () => "mock-uuid",
 }));
 
+// MockResponse 인터페이스 정의로 Lint 에러 방지
+interface MockResponse extends Partial<Response> {
+  redirect: jest.Mock;
+  cookie: jest.Mock;
+  json: jest.Mock;
+}
+
 describe("AuthController", () => {
   let controller: AuthController;
+  let response: MockResponse;
 
-  let mockValidateOAuthLogin: jest.Mock;
-  let mockGenerateUserTokens: jest.Mock;
-  let mockRefreshTokens: jest.Mock;
-  let mockFindUserById: jest.Mock;
-  let mockGetOrCreateGuest: jest.Mock;
-  let mockGenerateGuestToken: jest.Mock;
+  const mockAuthService = {
+    validateOAuthLogin: jest.fn(),
+    generateUserTokens: jest.fn(),
+    refreshTokens: jest.fn(),
+    findUserById: jest.fn(),
+    getOrCreateGuest: jest.fn(),
+    generateGuestToken: jest.fn(),
+  };
 
-  let mockCacheSet: jest.Mock;
-  let mockCacheGet: jest.Mock;
-  let mockCacheDel: jest.Mock;
-
-  let mockRedirect: jest.Mock;
-  let mockCookie: jest.Mock;
-  let mockJson: jest.Mock;
-  let mockResponse: Response;
+  const mockCacheManager = {
+    set: jest.fn(),
+    get: jest.fn(),
+    del: jest.fn(),
+  };
 
   const mockConfigService = {
     getOrThrow: jest.fn((key: string) => {
@@ -43,57 +50,22 @@ describe("AuthController", () => {
   };
 
   beforeEach(async () => {
-    mockValidateOAuthLogin = jest.fn();
-    mockGenerateUserTokens = jest.fn();
-    mockRefreshTokens = jest.fn();
-    mockFindUserById = jest.fn();
-    mockGetOrCreateGuest = jest.fn();
-    mockGenerateGuestToken = jest.fn();
-
-    mockCacheSet = jest.fn();
-    mockCacheGet = jest.fn();
-    mockCacheDel = jest.fn();
-
-    mockRedirect = jest.fn();
-    mockCookie = jest.fn();
-    mockJson = jest.fn();
-    mockResponse = {
-      redirect: mockRedirect,
-      cookie: mockCookie,
-      json: mockJson,
-    } as unknown as Response;
+    response = {
+      redirect: jest.fn(),
+      cookie: jest.fn(),
+      json: jest.fn(),
+    } as unknown as MockResponse;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
-        {
-          provide: AuthService,
-          useValue: {
-            validateOAuthLogin: mockValidateOAuthLogin,
-            generateUserTokens: mockGenerateUserTokens,
-            refreshTokens: mockRefreshTokens,
-            findUserById: mockFindUserById,
-            getOrCreateGuest: mockGetOrCreateGuest,
-            generateGuestToken: mockGenerateGuestToken,
-          },
-        },
+        { provide: AuthService, useValue: mockAuthService },
         { provide: ConfigService, useValue: mockConfigService },
-        {
-          provide: CACHE_MANAGER,
-          useValue: {
-            set: mockCacheSet,
-            get: mockCacheGet,
-            del: mockCacheDel,
-          },
-        },
+        { provide: CACHE_MANAGER, useValue: mockCacheManager },
       ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
   });
 
   it("should be defined", () => {
@@ -117,26 +89,28 @@ describe("AuthController", () => {
 
     it("should redirect to frontend with auth code on success", async () => {
       // given
-      mockValidateOAuthLogin.mockResolvedValue(user);
+      mockAuthService.validateOAuthLogin.mockResolvedValue(user);
 
       // when
-      await controller.googleAuthCallback(req as unknown as RequestWithUser, mockResponse);
+      await controller.googleAuthCallback(req as RequestWithUser, response as unknown as Response);
 
       // then
-      expect(mockValidateOAuthLogin).toHaveBeenCalledWith(req.user);
-      expect(mockCacheSet).toHaveBeenCalledWith("mock-uuid", user.id, 60000);
-      expect(mockRedirect).toHaveBeenCalledWith("http://localhost:5173?code=mock-uuid");
+      expect(mockAuthService.validateOAuthLogin).toHaveBeenCalledWith(req.user);
+      expect(mockCacheManager.set).toHaveBeenCalledWith("mock-uuid", user.id, 60000);
+      expect(response.redirect).toHaveBeenCalledWith("http://localhost:5173?code=mock-uuid");
     });
 
     it("should redirect to login page with error on failure", async () => {
       // given
-      mockValidateOAuthLogin.mockRejectedValue(new Error("Auth failed"));
+      mockAuthService.validateOAuthLogin.mockRejectedValue(new Error("Auth failed"));
 
       // when
-      await controller.googleAuthCallback(req as unknown as RequestWithUser, mockResponse);
+      await controller.googleAuthCallback(req as RequestWithUser, response as unknown as Response);
 
       // then
-      expect(mockRedirect).toHaveBeenCalledWith("http://localhost:5173/login?error=oauth_failed");
+      expect(response.redirect).toHaveBeenCalledWith(
+        "http://localhost:5173/login?error=oauth_failed",
+      );
     });
   });
 
@@ -150,33 +124,33 @@ describe("AuthController", () => {
 
     it("should return tokens if code is valid", async () => {
       // given
-      mockCacheGet.mockResolvedValue(user.id);
-      mockFindUserById.mockResolvedValue(user);
-      mockGenerateUserTokens.mockReturnValue(tokens);
+      mockCacheManager.get.mockResolvedValue(user.id);
+      mockAuthService.findUserById.mockResolvedValue(user);
+      mockAuthService.generateUserTokens.mockReturnValue(tokens);
 
       // when
-      await controller.exchangeToken(code, mockResponse);
+      await controller.exchangeToken(code, response as unknown as Response);
 
       // then
-      expect(mockCacheGet).toHaveBeenCalledWith(code);
-      expect(mockCacheDel).toHaveBeenCalledWith(code);
-      expect(mockFindUserById).toHaveBeenCalledWith(user.id);
-      expect(mockCookie).toHaveBeenCalledWith("refreshToken", tokens.refreshToken, {
+      expect(mockCacheManager.get).toHaveBeenCalledWith(code);
+      expect(mockCacheManager.del).toHaveBeenCalledWith(code);
+      expect(mockAuthService.findUserById).toHaveBeenCalledWith(user.id);
+      expect(response.cookie).toHaveBeenCalledWith("refreshToken", tokens.refreshToken, {
         httpOnly: true,
         secure: false, // In test env
         sameSite: "lax",
         path: "/",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
-      expect(mockJson).toHaveBeenCalledWith({ accessToken: tokens.accessToken });
+      expect(response.json).toHaveBeenCalledWith({ accessToken: tokens.accessToken });
     });
 
     it("should throw UnauthorizedException if code is invalid", async () => {
       // given
-      mockCacheGet.mockResolvedValue(null);
+      mockCacheManager.get.mockResolvedValue(null);
 
       // when & then
-      await expect(controller.exchangeToken(code, mockResponse)).rejects.toThrow(
+      await expect(controller.exchangeToken(code, response as unknown as Response)).rejects.toThrow(
         UnauthorizedException,
       );
     });
@@ -194,38 +168,38 @@ describe("AuthController", () => {
 
     it("should return new tokens if refresh token is valid", async () => {
       // given
-      mockRefreshTokens.mockResolvedValue(tokens);
+      mockAuthService.refreshTokens.mockResolvedValue(tokens);
 
       // when
       const result = await controller.refresh(refreshTokenDto);
 
       // then
       expect(result).toEqual(tokens);
-      expect(mockRefreshTokens).toHaveBeenCalledWith(refreshTokenDto.refreshToken);
+      expect(mockAuthService.refreshTokens).toHaveBeenCalledWith(refreshTokenDto.refreshToken);
     });
   });
 
   describe("me", () => {
     it("should return guest info if user is guest", async () => {
-      const req: Parameters<typeof controller.me>[0] = {
+      const req = {
         user: { isGuest: true, ip: "127.0.0.1" },
-      };
+      } as unknown as Parameters<typeof controller.me>[0];
 
-      mockGetOrCreateGuest.mockResolvedValue({
+      mockAuthService.getOrCreateGuest.mockResolvedValue({
         remainingUses: 3,
         createdAt: Date.now(),
       });
 
       const result = await controller.me(req);
 
-      expect(mockGetOrCreateGuest).toHaveBeenCalledWith("127.0.0.1");
+      expect(mockAuthService.getOrCreateGuest).toHaveBeenCalledWith("127.0.0.1");
       expect(result).toEqual({ isGuest: true, remainingUses: 3 });
     });
 
     it("should return user info if user is authenticated", async () => {
-      const req: Parameters<typeof controller.me>[0] = {
+      const req = {
         user: { isGuest: false, userId: "user-id", email: "test@example.com" },
-      };
+      } as unknown as Parameters<typeof controller.me>[0];
 
       const result = await controller.me(req);
 
