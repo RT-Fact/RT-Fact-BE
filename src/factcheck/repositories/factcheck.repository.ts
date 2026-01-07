@@ -86,4 +86,14 @@ export class FactCheckRepository {
       },
     });
   }
+
+  async deleteById(userId: string, factCheckId: string): Promise<boolean> {
+    const result = await this.prisma.factCheck.deleteMany({
+      where: {
+        id: factCheckId,
+        userId,
+      },
+    });
+    return result.count > 0;
+  }
 }

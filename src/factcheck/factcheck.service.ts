@@ -260,4 +260,24 @@ export class FactCheckService {
       createdAt: factCheck.createdAt.toISOString(),
     };
   }
+
+  async deleteFactCheck(user: RequestUser, factCheckId: string): Promise<{ success: boolean }> {
+    if (user.isGuest) {
+      throw new ForbiddenException({
+        error: "GUEST_NOT_ALLOWED",
+        message: "게스트는 히스토리를 이용할 수 없습니다.",
+      });
+    }
+
+    const deleted = await this.factCheckRepository.deleteById(user.userId, factCheckId);
+
+    if (!deleted) {
+      throw new NotFoundException({
+        error: "FACTCHECK_NOT_FOUND",
+        message: "팩트체크 결과를 찾을 수 없습니다.",
+      });
+    }
+
+    return { success: true };
+  }
 }

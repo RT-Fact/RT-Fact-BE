@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -43,5 +44,14 @@ export class FactCheckController {
     @Param("id") id: string,
   ): Promise<FactCheckResponse> {
     return this.factCheckService.getFactCheckById(req.user, id);
+  }
+
+  @Delete(":id")
+  @HttpCode(HttpStatus.OK)
+  async delete(
+    @Request() req: RequestWithUser,
+    @Param("id") id: string,
+  ): Promise<{ success: boolean }> {
+    return this.factCheckService.deleteFactCheck(req.user, id);
   }
 }
