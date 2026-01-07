@@ -12,6 +12,7 @@ describe("FactCheckService", () => {
   let mockSaveFactCheck: jest.Mock;
   let mockGetGuestInfo: jest.Mock;
   let mockSetGuestInfo: jest.Mock;
+  let mockDecrementRemainingUses: jest.Mock;
 
   const mockMcpResponse: McpResponse = {
     title: "테스트 제목",
@@ -57,6 +58,7 @@ describe("FactCheckService", () => {
     mockSaveFactCheck = jest.fn();
     mockGetGuestInfo = jest.fn();
     mockSetGuestInfo = jest.fn();
+    mockDecrementRemainingUses = jest.fn();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -78,6 +80,7 @@ describe("FactCheckService", () => {
           useValue: {
             getGuestInfo: mockGetGuestInfo,
             setGuestInfo: mockSetGuestInfo,
+            decrementRemainingUses: mockDecrementRemainingUses,
           },
         },
       ],
@@ -132,10 +135,7 @@ describe("FactCheckService", () => {
 
         await service.processFactCheck(mockGuestUser, "테스트 텍스트");
 
-        expect(mockSetGuestInfo).toHaveBeenCalledWith(
-          mockGuestUser.ip,
-          expect.objectContaining({ remainingUses: 2 }),
-        );
+        expect(mockDecrementRemainingUses).toHaveBeenCalledWith(mockGuestUser.ip);
       });
     });
 
