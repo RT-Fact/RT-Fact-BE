@@ -1,10 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger } from "@nestjs/common";
-import { ClaimStatus, Prisma, SentenceType, Verdict } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
 import { GuestRepository } from "../auth/repositories/guest.repository";
 import { McpService } from "../mcp/mcp.service";
 import { McpSentence } from "../mcp/types/mcp.types";
-import { PrismaService } from "../prisma/prisma.service";
 import {
   ClaimSentenceResponse,
   FactCheckResponse,
@@ -12,6 +10,7 @@ import {
   OpinionSentenceResponse,
   SentenceResponse,
 } from "./dto/factcheck-response.dto";
+import { FactCheckRepository } from "./repositories/factcheck.repository";
 import { RequestUser } from "./types/factcheck.types";
 
 @Injectable()
@@ -20,7 +19,7 @@ export class FactCheckService {
 
   constructor(
     private readonly mcpService: McpService,
-    private readonly prismaService: PrismaService,
+    private readonly factCheckRepository: FactCheckRepository,
     private readonly guestRepository: GuestRepository,
   ) {}
 
@@ -51,7 +50,13 @@ export class FactCheckService {
 
     // 5. 로그인 사용자: DB 저장
     if (!user.isGuest) {
-      await this.saveFactCheck(user.userId, factCheckId, mcpResponse.title, text, sentences);
+      await this.factCheckRepository.saveFactCheck(
+        user.userId,
+        factCheckId,
+        mcpResponse.title,
+        text,
+        sentences,
+      );
     }
 
     // 6. 게스트: 사용량 차감
@@ -144,48 +149,5 @@ export class FactCheckService {
       false: falseCount,
       opinion: opinionCount,
     };
-  }
-
-  /**
-   * 팩트체크 결과를 DB에 저장
-   */
-  private async saveFactCheck(
-    userId: string,
-    factCheckId: string,
-    title: string,
-    originalText: string,
-    sentences: SentenceResponse[],
-  ): Promise<void> {
-    await this.prismaService.factCheck.create({
-      data: {
-        id: factCheckId,
-        userId,
-        title,
-        originalText,
-        checkedCount: sentences.filter((s) => s.type === "claim").length,
-        sentences: {
-          create: sentences.map((sentence) => {
-            if (sentence.type === "claim") {
-              return {
-                type: SentenceType.CLAIM,
-                text: sentence.text,
-                position: sentence.position,
-                verdict: sentence.verdict as Verdict,
-                suggestion: sentence.suggestion,
-                sources: sentence.sources as unknown as Prisma.InputJsonValue,
-                status: ClaimStatus.PENDING,
-              };
-            } else {
-              return {
-                type: SentenceType.OPINION,
-                text: sentence.text,
-                position: sentence.position,
-                reason: sentence.reason,
-              };
-            }
-          }),
-        },
-      },
-    });
   }
 }

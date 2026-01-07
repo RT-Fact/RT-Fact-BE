@@ -3,13 +3,13 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { GuestRepository } from "../auth/repositories/guest.repository";
 import { McpService } from "../mcp/mcp.service";
 import type { McpResponse } from "../mcp/types/mcp.types";
-import { PrismaService } from "../prisma/prisma.service";
 import { FactCheckService } from "./factcheck.service";
+import { FactCheckRepository } from "./repositories/factcheck.repository";
 
 describe("FactCheckService", () => {
   let service: FactCheckService;
   let mockAnalyze: jest.Mock;
-  let mockFactCheckCreate: jest.Mock;
+  let mockSaveFactCheck: jest.Mock;
   let mockGetGuestInfo: jest.Mock;
   let mockSetGuestInfo: jest.Mock;
 
@@ -54,7 +54,7 @@ describe("FactCheckService", () => {
 
   beforeEach(async () => {
     mockAnalyze = jest.fn();
-    mockFactCheckCreate = jest.fn();
+    mockSaveFactCheck = jest.fn();
     mockGetGuestInfo = jest.fn();
     mockSetGuestInfo = jest.fn();
 
@@ -68,11 +68,9 @@ describe("FactCheckService", () => {
           },
         },
         {
-          provide: PrismaService,
+          provide: FactCheckRepository,
           useValue: {
-            factCheck: {
-              create: mockFactCheckCreate,
-            },
+            saveFactCheck: mockSaveFactCheck,
           },
         },
         {
@@ -147,14 +145,12 @@ describe("FactCheckService", () => {
 
         await service.processFactCheck(mockAuthenticatedUser, "테스트 텍스트");
 
-        expect(mockFactCheckCreate).toHaveBeenCalledWith(
-          expect.objectContaining({
-            data: expect.objectContaining({
-              userId: mockAuthenticatedUser.userId,
-              title: mockMcpResponse.title,
-              originalText: "테스트 텍스트",
-            }) as Record<string, unknown>,
-          }),
+        expect(mockSaveFactCheck).toHaveBeenCalledWith(
+          mockAuthenticatedUser.userId,
+          expect.any(String),
+          mockMcpResponse.title,
+          "테스트 텍스트",
+          expect.any(Array),
         );
       });
 
