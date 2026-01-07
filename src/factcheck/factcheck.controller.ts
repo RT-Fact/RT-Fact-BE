@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Request } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Request,
+} from "@nestjs/common";
 import { CreateFactCheckDto } from "./dto/create-factcheck.dto";
 import { FactCheckListResponse } from "./dto/factcheck-list-response.dto";
 import { FactCheckResponse } from "./dto/factcheck-response.dto";
@@ -25,5 +35,13 @@ export class FactCheckController {
     @Query() query: GetFactCheckListQueryDto,
   ): Promise<FactCheckListResponse> {
     return this.factCheckService.getFactCheckList(req.user, query);
+  }
+
+  @Get(":id")
+  async findById(
+    @Request() req: RequestWithUser,
+    @Param("id") id: string,
+  ): Promise<FactCheckResponse> {
+    return this.factCheckService.getFactCheckById(req.user, id);
   }
 }

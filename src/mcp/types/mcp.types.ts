@@ -18,7 +18,7 @@ export interface McpSentence {
   startIndex: number;
   endIndex: number;
   verdict?: McpVerdict;
-  suggestion?: string;
+  suggestion: string | null;
   sources?: McpSource[];
   reason?: string; // opinion인 경우
 }

@@ -1,19 +1,28 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
+import type { Sentence } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
 import { GuestRepository } from "../auth/repositories/guest.repository";
 import { McpService } from "../mcp/mcp.service";
-import { McpSentence } from "../mcp/types/mcp.types";
-import { FactCheckListResponse } from "./dto/factcheck-list-response.dto";
-import {
+import type { McpSentence } from "../mcp/types/mcp.types";
+import { CLAIM_STATUS_MAP } from "./constants";
+import type { FactCheckListResponse } from "./dto/factcheck-list-response.dto";
+import type {
   ClaimSentenceResponse,
   FactCheckResponse,
+  FactCheckSource,
   FactCheckSummary,
   OpinionSentenceResponse,
   SentenceResponse,
 } from "./dto/factcheck-response.dto";
-import { GetFactCheckListQueryDto } from "./dto/pagination-query.dto";
+import type { GetFactCheckListQueryDto } from "./dto/pagination-query.dto";
 import { FactCheckRepository } from "./repositories/factcheck.repository";
-import { RequestUser } from "./types/factcheck.types";
+import type { RequestUser } from "./types/factcheck.types";
 
 @Injectable()
 export class FactCheckService {
@@ -135,6 +144,31 @@ export class FactCheckService {
   }
 
   /**
+   * DB Sentence 엔티티를 API 응답 형식으로 변환
+   */
+  private transformDbSentenceToResponse(s: Sentence): SentenceResponse {
+    if (s.type === "CLAIM") {
+      return {
+        id: s.id.toString(),
+        type: "claim" as const,
+        text: s.text,
+        position: s.position,
+        verdict: s.verdict === "TRUE" ? "TRUE" : "FALSE",
+        sources: (s.sources as unknown as FactCheckSource[]) ?? [],
+        suggestion: s.suggestion,
+        status: s.status ? CLAIM_STATUS_MAP[s.status] : "pending",
+      };
+    }
+    return {
+      id: s.id.toString(),
+      type: "opinion" as const,
+      text: s.text,
+      position: s.position,
+      reason: s.reason || "",
+    };
+  }
+
+  /**
    * 요약 정보 계산
    */
   private calculateSummary(sentences: SentenceResponse[]): FactCheckSummary {
@@ -193,6 +227,37 @@ export class FactCheckService {
         total,
         totalPages: Math.ceil(total / query.limit),
       },
+    };
+  }
+
+  async getFactCheckById(user: RequestUser, factCheckId: string): Promise<FactCheckResponse> {
+    if (user.isGuest) {
+      throw new ForbiddenException({
+        error: "GUEST_NOT_ALLOWED",
+        message: "게스트는 히스토리를 이용할 수 없습니다.",
+      });
+    }
+
+    const factCheck = await this.factCheckRepository.findById(user.userId, factCheckId);
+
+    if (!factCheck) {
+      throw new NotFoundException({
+        error: "FACTCHECK_NOT_FOUND",
+        message: "팩트체크 결과를 찾을 수 없습니다.",
+      });
+    }
+
+    const sentences = factCheck.sentences.map((s) => this.transformDbSentenceToResponse(s));
+
+    const summary = this.calculateSummary(sentences);
+
+    return {
+      id: factCheck.id,
+      title: factCheck.title,
+      originalText: factCheck.originalText,
+      sentences,
+      summary,
+      createdAt: factCheck.createdAt.toISOString(),
     };
   }
 }

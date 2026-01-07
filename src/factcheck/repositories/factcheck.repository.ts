@@ -72,4 +72,18 @@ export class FactCheckRepository {
 
     return { items, total };
   }
+
+  async findById(userId: string, factCheckId: string) {
+    return this.prisma.factCheck.findFirst({
+      where: {
+        id: factCheckId,
+        userId,
+      },
+      include: {
+        sentences: {
+          orderBy: { position: "asc" },
+        },
+      },
+    });
+  }
 }
