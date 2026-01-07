@@ -8,3 +8,7 @@ export interface GuestUser {
   ip: string;
   isGuest: true;
 }
+
+export interface RequestWithUser {
+  user: AuthenticatedUser | GuestUser;
+}

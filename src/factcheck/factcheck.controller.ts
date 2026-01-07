@@ -3,13 +3,7 @@ import { AuthGuard } from "@nestjs/passport";
 import { CreateFactCheckDto } from "./dto/create-factcheck.dto";
 import { FactCheckResponse } from "./dto/factcheck-response.dto";
 import { FactCheckService } from "./factcheck.service";
-import { AuthenticatedUser, GuestUser } from "./types/factcheck.types";
-
-type RequestUser = AuthenticatedUser | GuestUser;
-
-interface RequestWithUser {
-  user: RequestUser;
-}
+import { RequestWithUser } from "./types/factcheck.types";
 
 @Controller("factcheck")
 export class FactCheckController {
