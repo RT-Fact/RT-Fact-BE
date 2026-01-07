@@ -8,6 +8,7 @@ import { PrismaModule } from "../prisma/prisma.module";
 import { RedisModule } from "../redis/redis.module";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
+import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { GuestRepository } from "./repositories/guest.repository";
 import { GoogleStrategy } from "./strategies/google.strategy";
 import { JwtStrategy } from "./strategies/jwt.strategy";
@@ -30,7 +31,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
     RedisModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, GuestRepository, GoogleStrategy, JwtStrategy],
-  exports: [AuthService],
+  providers: [AuthService, GuestRepository, GoogleStrategy, JwtStrategy, JwtAuthGuard],
+  exports: [AuthService, GuestRepository, JwtAuthGuard],
 })
 export class AuthModule {}

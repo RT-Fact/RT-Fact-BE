@@ -16,6 +16,7 @@ import { AuthGuard } from "@nestjs/passport";
 import { Cache } from "cache-manager";
 import type { Response } from "express";
 import { v4 as uuidv4 } from "uuid";
+import { Public } from "../common/decorators/public.decorator";
 import { AuthService } from "./auth.service";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { RequestWithUser } from "./types/auth.types";
@@ -33,6 +34,7 @@ export class AuthController {
    * Google OAuth 로그인 시작
    */
   @Get("google")
+  @Public()
   @UseGuards(AuthGuard("google"))
   googleAuth() {
     // Passport가 자동으로 Google 로그인 페이지로 리다이렉트
@@ -43,6 +45,7 @@ export class AuthController {
    * Google OAuth 콜백 처리
    */
   @Get("google/callback")
+  @Public()
   @UseGuards(AuthGuard("google"))
   async googleAuthCallback(@Req() req: RequestWithUser, @Res() res: Response) {
     const frontendUrl = this.configService.getOrThrow<string>("FRONTEND_URL");
@@ -72,6 +75,7 @@ export class AuthController {
    * Authorization Code를 Access Token + Refresh Token(Cookie)으로 교환
    */
   @Post("token")
+  @Public()
   async exchangeToken(@Body("code") code: string, @Res() res: Response) {
     const userId = await this.cacheManager.get<string>(code);
 
@@ -106,6 +110,7 @@ export class AuthController {
    * Access Token 갱신
    */
   @Post("refresh")
+  @Public()
   async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refreshTokens(refreshTokenDto.refreshToken);
   }
@@ -115,6 +120,7 @@ export class AuthController {
    * 게스트 토큰 발급
    */
   @Post("guest")
+  @Public()
   async guest(@Headers("x-forwarded-for") forwardedFor?: string, @Req() req?: { ip?: string }) {
     // IP 추출: X-Forwarded-For 헤더 또는 Express req.ip
     const ip = forwardedFor?.split(",")[0].trim() || req?.ip || "unknown";
@@ -137,7 +143,6 @@ export class AuthController {
    * 현재 인증된 사용자/게스트 정보 반환
    */
   @Get("me")
-  @UseGuards(AuthGuard("jwt"))
   async me(
     @Req() req: { user: { userId?: string; email?: string; ip?: string; isGuest: boolean } },
   ) {
