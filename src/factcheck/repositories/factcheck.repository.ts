@@ -49,4 +49,27 @@ export class FactCheckRepository {
       },
     });
   }
+
+  async findByUserId(userId: string, page: number, limit: number) {
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.factCheck.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          originalText: true,
+          checkedCount: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.factCheck.count({ where: { userId } }),
+    ]);
+
+    return { items, total };
+  }
 }

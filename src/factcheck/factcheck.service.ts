@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { GuestRepository } from "../auth/repositories/guest.repository";
 import { McpService } from "../mcp/mcp.service";
 import { McpSentence } from "../mcp/types/mcp.types";
+import { FactCheckListResponse } from "./dto/factcheck-list-response.dto";
 import {
   ClaimSentenceResponse,
   FactCheckResponse,
@@ -10,6 +11,7 @@ import {
   OpinionSentenceResponse,
   SentenceResponse,
 } from "./dto/factcheck-response.dto";
+import { GetFactCheckListQueryDto } from "./dto/pagination-query.dto";
 import { FactCheckRepository } from "./repositories/factcheck.repository";
 import { RequestUser } from "./types/factcheck.types";
 
@@ -157,6 +159,40 @@ export class FactCheckService {
       true: trueCount,
       false: falseCount,
       opinion: opinionCount,
+    };
+  }
+
+  async getFactCheckList(
+    user: RequestUser,
+    query: GetFactCheckListQueryDto,
+  ): Promise<FactCheckListResponse> {
+    if (user.isGuest) {
+      throw new ForbiddenException({
+        error: "GUEST_NOT_ALLOWED",
+        message: "게스트는 히스토리를 이용할 수 없습니다.",
+      });
+    }
+
+    const { items, total } = await this.factCheckRepository.findByUserId(
+      user.userId,
+      query.page,
+      query.limit,
+    );
+
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        preview: item.originalText.slice(0, 100),
+        checkedCount: item.checkedCount,
+        createdAt: item.createdAt.toISOString(),
+      })),
+      meta: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+      },
     };
   }
 }
