@@ -59,15 +59,9 @@ export class FactCheckService {
       );
     }
 
-    // 6. 게스트: 사용량 차감
+    // 6. 게스트: 사용량 차감 (Atomic)
     if (user.isGuest) {
-      const guestInfo = await this.guestRepository.getGuestInfo(user.ip);
-      if (guestInfo) {
-        await this.guestRepository.setGuestInfo(user.ip, {
-          ...guestInfo,
-          remainingUses: guestInfo.remainingUses - 1,
-        });
-      }
+      await this.guestRepository.decrementRemainingUses(user.ip);
     }
 
     return {
