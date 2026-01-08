@@ -13,13 +13,16 @@ export interface BaseSentenceResponse {
   position: number;
 }
 
+// Claim 상태 (BE-07에서도 사용)
+export type ClaimStatusResponse = "pending" | "applied" | "ignored";
+
 // Claim 문장 응답
 export interface ClaimSentenceResponse extends BaseSentenceResponse {
   type: "claim";
   verdict: "TRUE" | "FALSE";
-  suggestion?: string;
+  suggestion: string | null;
   sources: FactCheckSource[];
-  status: "pending" | "applied" | "ignored";
+  status: ClaimStatusResponse;
 }
 
 // Opinion 문장 응답

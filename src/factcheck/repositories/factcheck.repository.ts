@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ClaimStatus, Prisma, SentenceType, Verdict } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
-import { SentenceResponse } from "../dto/factcheck-response.dto";
+import type { SentenceResponse } from "../dto/factcheck-response.dto";
 
 @Injectable()
 export class FactCheckRepository {
@@ -48,5 +48,52 @@ export class FactCheckRepository {
         },
       },
     });
+  }
+
+  async findByUserId(userId: string, page: number, limit: number) {
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.factCheck.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          originalText: true,
+          checkedCount: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.factCheck.count({ where: { userId } }),
+    ]);
+
+    return { items, total };
+  }
+
+  async findById(userId: string, factCheckId: string) {
+    return this.prisma.factCheck.findFirst({
+      where: {
+        id: factCheckId,
+        userId,
+      },
+      include: {
+        sentences: {
+          orderBy: { position: "asc" },
+        },
+      },
+    });
+  }
+
+  async deleteById(userId: string, factCheckId: string): Promise<boolean> {
+    const result = await this.prisma.factCheck.deleteMany({
+      where: {
+        id: factCheckId,
+        userId,
+      },
+    });
+    return result.count > 0;
   }
 }

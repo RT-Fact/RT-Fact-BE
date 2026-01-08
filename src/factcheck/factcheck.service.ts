@@ -1,17 +1,28 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
+import type { Sentence } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
 import { GuestRepository } from "../auth/repositories/guest.repository";
 import { McpService } from "../mcp/mcp.service";
-import { McpSentence } from "../mcp/types/mcp.types";
-import {
+import type { McpSentence } from "../mcp/types/mcp.types";
+import { CLAIM_STATUS_MAP } from "./constants";
+import type { FactCheckListResponse } from "./dto/factcheck-list-response.dto";
+import type {
   ClaimSentenceResponse,
   FactCheckResponse,
+  FactCheckSource,
   FactCheckSummary,
   OpinionSentenceResponse,
   SentenceResponse,
 } from "./dto/factcheck-response.dto";
+import type { GetFactCheckListQueryDto } from "./dto/pagination-query.dto";
 import { FactCheckRepository } from "./repositories/factcheck.repository";
-import { RequestUser } from "./types/factcheck.types";
+import type { AuthenticatedUser, RequestUser } from "./types/factcheck.types";
 
 @Injectable()
 export class FactCheckService {
@@ -133,6 +144,31 @@ export class FactCheckService {
   }
 
   /**
+   * DB Sentence 엔티티를 API 응답 형식으로 변환
+   */
+  private transformDbSentenceToResponse(s: Sentence): SentenceResponse {
+    if (s.type === "CLAIM") {
+      return {
+        id: s.id.toString(),
+        type: "claim" as const,
+        text: s.text,
+        position: s.position,
+        verdict: s.verdict ?? "FALSE",
+        sources: (s.sources as unknown as FactCheckSource[]) ?? [],
+        suggestion: s.suggestion,
+        status: s.status ? CLAIM_STATUS_MAP[s.status] : "pending",
+      };
+    }
+    return {
+      id: s.id.toString(),
+      type: "opinion" as const,
+      text: s.text,
+      position: s.position,
+      reason: s.reason || "",
+    };
+  }
+
+  /**
    * 요약 정보 계산
    */
   private calculateSummary(sentences: SentenceResponse[]): FactCheckSummary {
@@ -158,5 +194,72 @@ export class FactCheckService {
       false: falseCount,
       opinion: opinionCount,
     };
+  }
+
+  async getFactCheckList(
+    user: AuthenticatedUser,
+    query: GetFactCheckListQueryDto,
+  ): Promise<FactCheckListResponse> {
+    const { items, total } = await this.factCheckRepository.findByUserId(
+      user.userId,
+      query.page,
+      query.limit,
+    );
+
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        preview: item.originalText.slice(0, 100),
+        checkedCount: item.checkedCount,
+        createdAt: item.createdAt.toISOString(),
+      })),
+      meta: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+      },
+    };
+  }
+
+  async getFactCheckById(user: AuthenticatedUser, factCheckId: string): Promise<FactCheckResponse> {
+    const factCheck = await this.factCheckRepository.findById(user.userId, factCheckId);
+
+    if (!factCheck) {
+      throw new NotFoundException({
+        error: "FACTCHECK_NOT_FOUND",
+        message: "팩트체크 결과를 찾을 수 없습니다.",
+      });
+    }
+
+    const sentences = factCheck.sentences.map((s) => this.transformDbSentenceToResponse(s));
+
+    const summary = this.calculateSummary(sentences);
+
+    return {
+      id: factCheck.id,
+      title: factCheck.title,
+      originalText: factCheck.originalText,
+      sentences,
+      summary,
+      createdAt: factCheck.createdAt.toISOString(),
+    };
+  }
+
+  async deleteFactCheck(
+    user: AuthenticatedUser,
+    factCheckId: string,
+  ): Promise<{ success: boolean }> {
+    const deleted = await this.factCheckRepository.deleteById(user.userId, factCheckId);
+
+    if (!deleted) {
+      throw new NotFoundException({
+        error: "FACTCHECK_NOT_FOUND",
+        message: "팩트체크 결과를 찾을 수 없습니다.",
+      });
+    }
+
+    return { success: true };
   }
 }

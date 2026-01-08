@@ -6,6 +6,7 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { AuthModule } from "./auth/auth.module";
 import { JwtAuthGuard } from "./auth/guards/jwt-auth.guard";
+import { LoginGuard } from "./auth/guards/login.guard";
 import { FactCheckModule } from "./factcheck/factcheck.module";
 import { McpModule } from "./mcp/mcp.module";
 import { PrismaModule } from "./prisma/prisma.module";
@@ -48,6 +49,10 @@ import { RedisModule } from "./redis/redis.module";
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: LoginGuard,
     },
   ],
 })
