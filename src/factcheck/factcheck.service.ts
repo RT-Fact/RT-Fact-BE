@@ -22,7 +22,7 @@ import type {
 } from "./dto/factcheck-response.dto";
 import type { GetFactCheckListQueryDto } from "./dto/pagination-query.dto";
 import { FactCheckRepository } from "./repositories/factcheck.repository";
-import type { RequestUser } from "./types/factcheck.types";
+import type { AuthenticatedUser, RequestUser } from "./types/factcheck.types";
 
 @Injectable()
 export class FactCheckService {
@@ -153,7 +153,7 @@ export class FactCheckService {
         type: "claim" as const,
         text: s.text,
         position: s.position,
-        verdict: s.verdict === "TRUE" ? "TRUE" : "FALSE",
+        verdict: s.verdict ?? "FALSE",
         sources: (s.sources as unknown as FactCheckSource[]) ?? [],
         suggestion: s.suggestion,
         status: s.status ? CLAIM_STATUS_MAP[s.status] : "pending",
@@ -197,16 +197,9 @@ export class FactCheckService {
   }
 
   async getFactCheckList(
-    user: RequestUser,
+    user: AuthenticatedUser,
     query: GetFactCheckListQueryDto,
   ): Promise<FactCheckListResponse> {
-    if (user.isGuest) {
-      throw new ForbiddenException({
-        error: "GUEST_NOT_ALLOWED",
-        message: "게스트는 히스토리를 이용할 수 없습니다.",
-      });
-    }
-
     const { items, total } = await this.factCheckRepository.findByUserId(
       user.userId,
       query.page,
@@ -230,14 +223,7 @@ export class FactCheckService {
     };
   }
 
-  async getFactCheckById(user: RequestUser, factCheckId: string): Promise<FactCheckResponse> {
-    if (user.isGuest) {
-      throw new ForbiddenException({
-        error: "GUEST_NOT_ALLOWED",
-        message: "게스트는 히스토리를 이용할 수 없습니다.",
-      });
-    }
-
+  async getFactCheckById(user: AuthenticatedUser, factCheckId: string): Promise<FactCheckResponse> {
     const factCheck = await this.factCheckRepository.findById(user.userId, factCheckId);
 
     if (!factCheck) {
@@ -261,14 +247,10 @@ export class FactCheckService {
     };
   }
 
-  async deleteFactCheck(user: RequestUser, factCheckId: string): Promise<{ success: boolean }> {
-    if (user.isGuest) {
-      throw new ForbiddenException({
-        error: "GUEST_NOT_ALLOWED",
-        message: "게스트는 히스토리를 이용할 수 없습니다.",
-      });
-    }
-
+  async deleteFactCheck(
+    user: AuthenticatedUser,
+    factCheckId: string,
+  ): Promise<{ success: boolean }> {
     const deleted = await this.factCheckRepository.deleteById(user.userId, factCheckId);
 
     if (!deleted) {

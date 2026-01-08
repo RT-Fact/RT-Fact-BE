@@ -10,12 +10,14 @@ import {
   Query,
   Request,
 } from "@nestjs/common";
+import { CurrentUser } from "../common/decorators/current-user.decorator";
+import { RequireLogin } from "../common/decorators/require-login.decorator";
 import { CreateFactCheckDto } from "./dto/create-factcheck.dto";
 import { FactCheckListResponse } from "./dto/factcheck-list-response.dto";
 import { FactCheckResponse } from "./dto/factcheck-response.dto";
 import { GetFactCheckListQueryDto } from "./dto/pagination-query.dto";
 import { FactCheckService } from "./factcheck.service";
-import { RequestWithUser } from "./types/factcheck.types";
+import type { AuthenticatedUser, RequestWithUser } from "./types/factcheck.types";
 
 @Controller("factcheck")
 export class FactCheckController {
@@ -31,27 +33,30 @@ export class FactCheckController {
   }
 
   @Get()
+  @RequireLogin()
   async findAll(
-    @Request() req: RequestWithUser,
+    @CurrentUser() user: AuthenticatedUser,
     @Query() query: GetFactCheckListQueryDto,
   ): Promise<FactCheckListResponse> {
-    return this.factCheckService.getFactCheckList(req.user, query);
+    return this.factCheckService.getFactCheckList(user, query);
   }
 
   @Get(":id")
+  @RequireLogin()
   async findById(
-    @Request() req: RequestWithUser,
+    @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
   ): Promise<FactCheckResponse> {
-    return this.factCheckService.getFactCheckById(req.user, id);
+    return this.factCheckService.getFactCheckById(user, id);
   }
 
   @Delete(":id")
+  @RequireLogin()
   @HttpCode(HttpStatus.OK)
   async delete(
-    @Request() req: RequestWithUser,
+    @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
   ): Promise<{ success: boolean }> {
-    return this.factCheckService.deleteFactCheck(req.user, id);
+    return this.factCheckService.deleteFactCheck(user, id);
   }
 }
