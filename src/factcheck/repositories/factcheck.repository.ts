@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ClaimStatus, Prisma, SentenceType, Verdict } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
-import { SentenceResponse } from "../dto/factcheck-response.dto";
+import type { SentenceResponse } from "../dto/factcheck-response.dto";
 
 @Injectable()
 export class FactCheckRepository {
