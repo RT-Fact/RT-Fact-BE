@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   Request,
@@ -13,8 +14,8 @@ import {
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { RequireLogin } from "../common/decorators/require-login.decorator";
 import { CreateFactCheckDto } from "./dto/create-factcheck.dto";
-import { FactCheckListResponse } from "./dto/factcheck-list-response.dto";
-import { FactCheckResponse } from "./dto/factcheck-response.dto";
+import type { FactCheckListResponse } from "./dto/factcheck-list-response.dto";
+import type { ClaimStatusUpdateResponse, FactCheckResponse } from "./dto/factcheck-response.dto";
 import { GetFactCheckListQueryDto } from "./dto/pagination-query.dto";
 import { FactCheckService } from "./factcheck.service";
 import type { AuthenticatedUser, RequestWithUser } from "./types/factcheck.types";
@@ -58,5 +59,25 @@ export class FactCheckController {
     @Param("id") id: string,
   ): Promise<{ success: boolean }> {
     return this.factCheckService.deleteFactCheck(user, id);
+  }
+
+  @Patch(":id/claims/:claimId/apply")
+  @HttpCode(HttpStatus.OK)
+  async apply(
+    @Request() req: RequestWithUser,
+    @Param("id") id: string,
+    @Param("claimId") claimId: string,
+  ): Promise<ClaimStatusUpdateResponse> {
+    return this.factCheckService.applyClaim(req.user, id, claimId);
+  }
+
+  @Patch(":id/claims/:claimId/ignore")
+  @HttpCode(HttpStatus.OK)
+  async ignore(
+    @Request() req: RequestWithUser,
+    @Param("id") id: string,
+    @Param("claimId") claimId: string,
+  ): Promise<ClaimStatusUpdateResponse> {
+    return this.factCheckService.ignoreClaim(req.user, id, claimId);
   }
 }
