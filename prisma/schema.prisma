@@ -64,7 +64,7 @@ model FactCheck {
 // 4. 문장 (Sentence) - position 방식
 // ====================================
 model Sentence {
-  id       Int          @id @default(autoincrement())
+  id       String       @id @default(uuid())
   type     SentenceType // CLAIM, OPINION (EXCLUDED는 저장 안 함)
   text     String       @db.Text
   position Int          // 문장 순서 (0부터 시작)

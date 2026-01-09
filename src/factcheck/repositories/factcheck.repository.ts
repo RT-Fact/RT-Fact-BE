@@ -28,6 +28,7 @@ export class FactCheckRepository {
           create: sentences.map((sentence) => {
             if (sentence.type === "claim") {
               return {
+                id: sentence.id,
                 type: SentenceType.CLAIM,
                 text: sentence.text,
                 position: sentence.position,
@@ -38,6 +39,7 @@ export class FactCheckRepository {
               };
             } else {
               return {
+                id: sentence.id,
                 type: SentenceType.OPINION,
                 text: sentence.text,
                 position: sentence.position,
@@ -93,6 +95,26 @@ export class FactCheckRepository {
         id: factCheckId,
         userId,
       },
+    });
+    return result.count > 0;
+  }
+
+  async updateClaimStatus(
+    userId: string,
+    factCheckId: string,
+    claimId: string,
+    status: ClaimStatus,
+  ): Promise<boolean> {
+    const result = await this.prisma.sentence.updateMany({
+      where: {
+        id: claimId,
+        factCheck: {
+          id: factCheckId,
+          userId,
+        },
+        type: SentenceType.CLAIM,
+      },
+      data: { status },
     });
     return result.count > 0;
   }

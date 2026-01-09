@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import type { Sentence } from "@prisma/client";
+import { ClaimStatus, type Sentence } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
 import { GuestRepository } from "../auth/repositories/guest.repository";
 import { McpService } from "../mcp/mcp.service";
@@ -14,6 +14,7 @@ import { CLAIM_STATUS_MAP } from "./constants";
 import type { FactCheckListResponse } from "./dto/factcheck-list-response.dto";
 import type {
   ClaimSentenceResponse,
+  ClaimStatusUpdateResponse,
   FactCheckResponse,
   FactCheckSource,
   FactCheckSummary,
@@ -261,5 +262,50 @@ export class FactCheckService {
     }
 
     return { success: true };
+  }
+
+  async applyClaim(
+    user: RequestUser,
+    factCheckId: string,
+    claimId: string,
+  ): Promise<ClaimStatusUpdateResponse> {
+    return this.updateStatus(user, factCheckId, claimId, ClaimStatus.APPLIED);
+  }
+
+  async ignoreClaim(
+    user: RequestUser,
+    factCheckId: string,
+    claimId: string,
+  ): Promise<ClaimStatusUpdateResponse> {
+    return this.updateStatus(user, factCheckId, claimId, ClaimStatus.IGNORED);
+  }
+
+  private async updateStatus(
+    user: RequestUser,
+    factCheckId: string,
+    claimId: string,
+    targetStatus: ClaimStatus,
+  ): Promise<ClaimStatusUpdateResponse> {
+    const statusValue = CLAIM_STATUS_MAP[targetStatus] as "applied" | "ignored";
+
+    if (user.isGuest) {
+      return { id: claimId, status: statusValue };
+    }
+
+    const updated = await this.factCheckRepository.updateClaimStatus(
+      user.userId,
+      factCheckId,
+      claimId,
+      targetStatus,
+    );
+
+    if (!updated) {
+      throw new NotFoundException({
+        error: "CLAIM_NOT_FOUND",
+        message: "해당 항목을 찾을 수 없거나 이미 처리되었습니다.",
+      });
+    }
+
+    return { id: claimId, status: statusValue };
   }
 }

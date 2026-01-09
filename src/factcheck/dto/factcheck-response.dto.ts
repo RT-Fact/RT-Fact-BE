@@ -13,8 +13,14 @@ export interface BaseSentenceResponse {
   position: number;
 }
 
-// Claim 상태 (BE-07에서도 사용)
+// Claim 상태 (조회 시)
 export type ClaimStatusResponse = "pending" | "applied" | "ignored";
+
+// Claim 상태 업데이트 응답 (apply/ignore API)
+export interface ClaimStatusUpdateResponse {
+  id: string;
+  status: Exclude<ClaimStatusResponse, "pending">;
+}
 
 // Claim 문장 응답
 export interface ClaimSentenceResponse extends BaseSentenceResponse {
