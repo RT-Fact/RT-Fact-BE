@@ -28,6 +28,7 @@ describe("FactCheck (e2e)", () => {
         startIndex: 0,
         endIndex: 20,
         verdict: "TRUE",
+        suggestion: null,
         sources: [{ title: "출처", url: "https://example.com" }],
       },
       {
@@ -36,6 +37,7 @@ describe("FactCheck (e2e)", () => {
         startIndex: 21,
         endIndex: 35,
         reason: "주관적 표현",
+        suggestion: null,
       },
     ],
   };
@@ -174,9 +176,6 @@ describe("FactCheck (e2e)", () => {
     describe("Success Response", () => {
       it("로그인 사용자의 정상 요청은 201 Created를 반환해야 한다", async () => {
         const token = generateUserToken();
-
-        // (삭제됨: beforeAll에서 이미 생성함)
-
         const response: Response = await request(app.getHttpServer() as Server)
           .post("/factcheck")
           .set("Authorization", `Bearer ${token}`)
