@@ -29,3 +29,33 @@ export interface McpResponse {
   originalText: string;
   sentences: McpSentence[];
 }
+
+// JSON-RPC 2.0 응답 타입 (MCP 서버 통신용)
+interface JsonRpcContentItem {
+  type: string;
+  text: string;
+}
+
+interface JsonRpcError {
+  code: number;
+  message: string;
+  data?: unknown;
+}
+
+interface JsonRpcSuccessResponse {
+  jsonrpc: "2.0";
+  id: string;
+  result: {
+    content: JsonRpcContentItem[];
+  };
+  error?: never;
+}
+
+interface JsonRpcErrorResponse {
+  jsonrpc: "2.0";
+  id: string | null;
+  result?: never;
+  error: JsonRpcError;
+}
+
+export type JsonRpcResponse = JsonRpcSuccessResponse | JsonRpcErrorResponse;
