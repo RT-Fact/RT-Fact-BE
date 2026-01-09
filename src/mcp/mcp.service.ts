@@ -51,6 +51,11 @@ export class McpService {
         throw new BadGatewayException("MCP_ERROR");
       }
 
+      if (!jsonRpcResponse.result) {
+        this.logger.error(`MCP 서버 응답에 result가 없습니다: ${JSON.stringify(jsonRpcResponse)}`);
+        throw new BadGatewayException("MCP_ERROR");
+      }
+
       // 성공 응답: result.content[0].text에 JSON 문자열로 들어있음
       const content = jsonRpcResponse.result.content[0];
       if (!content || content.type !== "text") {
