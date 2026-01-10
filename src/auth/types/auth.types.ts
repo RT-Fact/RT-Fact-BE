@@ -45,12 +45,6 @@ export interface TokenPair {
 }
 
 /**
- * JWT 인증을 통과한 사용자 정보
- */
-/**
- * 로그인한 일반 사용자 정보
- */
-/**
  * 로그인한 일반 사용자 정보
  */
 export interface AuthenticatedUser {
