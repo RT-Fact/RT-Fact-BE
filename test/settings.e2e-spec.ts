@@ -141,4 +141,89 @@ describe("SettingsController (e2e)", () => {
         .expect(401);
     });
   });
+
+  describe("POST /settings/blacklist", () => {
+    const domain = "bad-site.com";
+
+    it("should add a domain to blacklist", () => {
+      return request(app.getHttpServer() as http.Server)
+        .post("/settings/blacklist")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ domain })
+        .expect(201)
+        .expect((res) => {
+          const body = res.body as SettingsResponse;
+          expect(body.blacklist).toContain(domain);
+        });
+    });
+
+    it("should fail with DUPLICATE_DOMAIN if domain already exists", () => {
+      return request(app.getHttpServer() as http.Server)
+        .post("/settings/blacklist")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ domain })
+        .expect(400)
+        .expect((res) => {
+          const body = res.body as ErrorResponse;
+          expect(body.code).toBe("DUPLICATE_DOMAIN");
+        });
+    });
+  });
+
+  describe("Conflict Check (Whitelist vs Blacklist)", () => {
+    const whiteDomain = "safe.com";
+    const blackDomain = "danger.com";
+
+    beforeAll(async () => {
+      // Setup: Add one to whitelist, one to blacklist
+      await request(app.getHttpServer() as http.Server)
+        .post("/settings/whitelist")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ domain: whiteDomain });
+
+      await request(app.getHttpServer() as http.Server)
+        .post("/settings/blacklist")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ domain: blackDomain });
+    });
+
+    it("should fail to add whitelisted domain to blacklist", () => {
+      return request(app.getHttpServer() as http.Server)
+        .post("/settings/blacklist")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ domain: whiteDomain })
+        .expect(400)
+        .expect((res) => {
+          const body = res.body as ErrorResponse;
+          expect(body.code).toBe("DOMAIN_CONFLICT");
+        });
+    });
+
+    it("should fail to add blacklisted domain to whitelist", () => {
+      return request(app.getHttpServer() as http.Server)
+        .post("/settings/whitelist")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ domain: blackDomain })
+        .expect(400)
+        .expect((res) => {
+          const body = res.body as ErrorResponse;
+          expect(body.code).toBe("DOMAIN_CONFLICT");
+        });
+    });
+  });
+
+  describe("DELETE /settings/blacklist/:domain", () => {
+    const domain = "bad-site.com";
+
+    it("should remove a domain from blacklist", () => {
+      return request(app.getHttpServer() as http.Server)
+        .delete(`/settings/blacklist/${domain}`)
+        .set("Authorization", `Bearer ${accessToken}`)
+        .expect(200)
+        .expect((res) => {
+          const body = res.body as SettingsResponse;
+          expect(body.blacklist).not.toContain(domain);
+        });
+    });
+  });
 });
