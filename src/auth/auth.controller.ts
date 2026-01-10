@@ -143,7 +143,6 @@ export class AuthController {
    * 현재 인증된 사용자/게스트 정보 반환
    */
   @Get("me")
-  @Get("me")
   async me(@Req() req: RequestWithUser) {
     const { user } = req;
 
