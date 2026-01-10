@@ -19,7 +19,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Public } from "../common/decorators/public.decorator";
 import { AuthService } from "./auth.service";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
-import { RequestWithUser } from "./types/auth.types";
+import { isGuestUser, RequestWithGoogleUser, RequestWithUser } from "./types/auth.types";
 
 @Controller("auth")
 export class AuthController {
@@ -47,7 +47,7 @@ export class AuthController {
   @Get("google/callback")
   @Public()
   @UseGuards(AuthGuard("google"))
-  async googleAuthCallback(@Req() req: RequestWithUser, @Res() res: Response) {
+  async googleAuthCallback(@Req() req: RequestWithGoogleUser, @Res() res: Response) {
     const frontendUrl = this.configService.getOrThrow<string>("FRONTEND_URL");
 
     try {
@@ -143,13 +143,12 @@ export class AuthController {
    * 현재 인증된 사용자/게스트 정보 반환
    */
   @Get("me")
-  async me(
-    @Req() req: { user: { userId?: string; email?: string; ip?: string; isGuest: boolean } },
-  ) {
+  @Get("me")
+  async me(@Req() req: RequestWithUser) {
     const { user } = req;
 
-    if (user.isGuest) {
-      const guestInfo = await this.authService.getOrCreateGuest(user.ip!);
+    if (isGuestUser(user)) {
+      const guestInfo = await this.authService.getOrCreateGuest(user.ip);
 
       return {
         isGuest: true,

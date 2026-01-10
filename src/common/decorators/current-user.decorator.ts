@@ -1,5 +1,5 @@
 import { createParamDecorator, type ExecutionContext } from "@nestjs/common";
-import type { AuthenticatedUser } from "../../factcheck/types/factcheck.types";
+import type { AuthenticatedUser } from "../../auth/types/auth.types";
 
 /**
  * @RequireLogin() 데코레이터와 함께 사용

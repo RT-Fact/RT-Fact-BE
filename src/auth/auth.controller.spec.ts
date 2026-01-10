@@ -6,7 +6,7 @@ import type { Response } from "express";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import type { RefreshTokenDto } from "./dto/refresh-token.dto";
-import type { GoogleProfile, RequestWithUser, TokenPair } from "./types/auth.types";
+import type { GoogleProfile, RequestWithGoogleUser, TokenPair } from "./types/auth.types";
 
 jest.mock("uuid", () => ({
   v4: () => "mock-uuid",
@@ -92,7 +92,10 @@ describe("AuthController", () => {
       mockAuthService.validateOAuthLogin.mockResolvedValue(user);
 
       // when
-      await controller.googleAuthCallback(req as RequestWithUser, response as unknown as Response);
+      await controller.googleAuthCallback(
+        req as unknown as RequestWithGoogleUser,
+        response as unknown as Response,
+      );
 
       // then
       expect(mockAuthService.validateOAuthLogin).toHaveBeenCalledWith(req.user);
@@ -105,7 +108,10 @@ describe("AuthController", () => {
       mockAuthService.validateOAuthLogin.mockRejectedValue(new Error("Auth failed"));
 
       // when
-      await controller.googleAuthCallback(req as RequestWithUser, response as unknown as Response);
+      await controller.googleAuthCallback(
+        req as unknown as RequestWithGoogleUser,
+        response as unknown as Response,
+      );
 
       // then
       expect(response.redirect).toHaveBeenCalledWith(

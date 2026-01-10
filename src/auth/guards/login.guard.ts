@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { REQUIRE_LOGIN_KEY } from "../../common/decorators/require-login.decorator";
-import type { RequestUser } from "../../factcheck/types/factcheck.types";
+import type { JwtUser } from "../types/auth.types";
 
 @Injectable()
 export class LoginGuard implements CanActivate {
@@ -22,7 +22,7 @@ export class LoginGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<{ user: RequestUser }>();
+    const request = context.switchToHttp().getRequest<{ user: JwtUser }>();
     const user = request.user;
 
     if (user.isGuest) {

@@ -8,6 +8,7 @@ import {
 import { ClaimStatus, type Sentence } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
 import { GuestRepository } from "../auth/repositories/guest.repository";
+import type { AuthenticatedUser, JwtUser } from "../auth/types/auth.types";
 import { McpService } from "../mcp/mcp.service";
 import type { McpSentence } from "../mcp/types/mcp.types";
 import { CLAIM_STATUS_MAP } from "./constants";
@@ -23,7 +24,6 @@ import type {
 } from "./dto/factcheck-response.dto";
 import type { GetFactCheckListQueryDto } from "./dto/pagination-query.dto";
 import { FactCheckRepository } from "./repositories/factcheck.repository";
-import type { AuthenticatedUser, RequestUser } from "./types/factcheck.types";
 
 @Injectable()
 export class FactCheckService {
@@ -38,7 +38,7 @@ export class FactCheckService {
   /**
    * 팩트체크 수행
    */
-  async processFactCheck(user: RequestUser, text: string): Promise<FactCheckResponse> {
+  async processFactCheck(user: JwtUser, text: string): Promise<FactCheckResponse> {
     const userId = user.isGuest ? `guest:${user.ip}` : user.userId;
     this.logger.log(`팩트체크 요청 시작 - 사용자: ${userId}, 텍스트 길이: ${text.length}`);
 
@@ -197,7 +197,7 @@ export class FactCheckService {
     };
   }
 
-  async getFactCheckList(
+  async getFactCheckHistory(
     user: AuthenticatedUser,
     query: GetFactCheckListQueryDto,
   ): Promise<FactCheckListResponse> {
@@ -265,7 +265,7 @@ export class FactCheckService {
   }
 
   async applyClaim(
-    user: RequestUser,
+    user: JwtUser,
     factCheckId: string,
     claimId: string,
   ): Promise<ClaimStatusUpdateResponse> {
@@ -273,7 +273,7 @@ export class FactCheckService {
   }
 
   async ignoreClaim(
-    user: RequestUser,
+    user: JwtUser,
     factCheckId: string,
     claimId: string,
   ): Promise<ClaimStatusUpdateResponse> {
@@ -281,7 +281,7 @@ export class FactCheckService {
   }
 
   private async updateStatus(
-    user: RequestUser,
+    user: JwtUser,
     factCheckId: string,
     claimId: string,
     targetStatus: ClaimStatus,
