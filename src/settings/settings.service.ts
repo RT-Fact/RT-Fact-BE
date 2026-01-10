@@ -1,16 +1,13 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { ListType, Prisma } from "@prisma/client";
-import { PrismaService } from "../prisma/prisma.service";
+import { DomainFilterRepository } from "./repositories/domain-filter.repository";
 
 @Injectable()
 export class SettingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly repository: DomainFilterRepository) {}
 
   async getSettings(userId: string) {
-    const filters = await this.prisma.domainFilter.findMany({
-      where: { userId },
-      select: { domain: true, listType: true },
-    });
+    const filters = await this.repository.findFiltersByUserId(userId);
 
     const whitelist = filters.filter((f) => f.listType === ListType.WHITE).map((f) => f.domain);
     const blacklist = filters.filter((f) => f.listType === ListType.BLACK).map((f) => f.domain);
@@ -19,52 +16,26 @@ export class SettingsService {
   }
 
   async addWhitelist(userId: string, domain: string) {
-    await this.checkDomainConflict(userId, domain, ListType.WHITE);
-
-    try {
-      await this.prisma.domainFilter.create({
-        data: {
-          userId,
-          domain,
-          listType: ListType.WHITE,
-        },
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new BadRequestException({
-          code: "DUPLICATE_DOMAIN",
-          message: "이미 등록된 도메인입니다",
-        });
-      }
-      throw error;
-    }
-
-    return this.getWhitelist(userId);
-  }
-
-  async deleteWhitelist(userId: string, domain: string) {
-    await this.prisma.domainFilter.deleteMany({
-      where: {
-        userId,
-        domain,
-        listType: ListType.WHITE,
-      },
-    });
-
-    return this.getWhitelist(userId);
+    return this.addFilter(userId, domain, ListType.WHITE);
   }
 
   async addBlacklist(userId: string, domain: string) {
-    await this.checkDomainConflict(userId, domain, ListType.BLACK);
+    return this.addFilter(userId, domain, ListType.BLACK);
+  }
+
+  async deleteWhitelist(userId: string, domain: string) {
+    return this.deleteFilter(userId, domain, ListType.WHITE);
+  }
+
+  async deleteBlacklist(userId: string, domain: string) {
+    return this.deleteFilter(userId, domain, ListType.BLACK);
+  }
+
+  private async addFilter(userId: string, domain: string, listType: ListType) {
+    await this.checkDomainConflict(userId, domain, listType);
 
     try {
-      await this.prisma.domainFilter.create({
-        data: {
-          userId,
-          domain,
-          listType: ListType.BLACK,
-        },
-      });
+      await this.repository.createFilter(userId, domain, listType);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         throw new BadRequestException({
@@ -75,48 +46,23 @@ export class SettingsService {
       throw error;
     }
 
-    return this.getBlacklist(userId);
+    return this.getFilterList(userId, listType);
   }
 
-  async deleteBlacklist(userId: string, domain: string) {
-    await this.prisma.domainFilter.deleteMany({
-      where: {
-        userId,
-        domain,
-        listType: ListType.BLACK,
-      },
-    });
-
-    return this.getBlacklist(userId);
+  private async deleteFilter(userId: string, domain: string, listType: ListType) {
+    await this.repository.deleteFilter(userId, domain, listType);
+    return this.getFilterList(userId, listType);
   }
 
-  private async getWhitelist(userId: string) {
-    const filters = await this.prisma.domainFilter.findMany({
-      where: { userId, listType: ListType.WHITE },
-      select: { domain: true },
-    });
-
-    return { whitelist: filters.map((f) => f.domain) };
-  }
-
-  private async getBlacklist(userId: string) {
-    const filters = await this.prisma.domainFilter.findMany({
-      where: { userId, listType: ListType.BLACK },
-      select: { domain: true },
-    });
-
-    return { blacklist: filters.map((f) => f.domain) };
+  private async getFilterList(userId: string, listType: ListType) {
+    const filters = await this.repository.findFiltersByType(userId, listType);
+    const list = filters.map((f) => f.domain);
+    return listType === ListType.WHITE ? { whitelist: list } : { blacklist: list };
   }
 
   private async checkDomainConflict(userId: string, domain: string, targetType: ListType) {
     const conflictType = targetType === ListType.WHITE ? ListType.BLACK : ListType.WHITE;
-    const conflict = await this.prisma.domainFilter.findFirst({
-      where: {
-        userId,
-        domain,
-        listType: conflictType,
-      },
-    });
+    const conflict = await this.repository.findFilter(userId, domain, conflictType);
 
     if (conflict) {
       throw new BadRequestException({
