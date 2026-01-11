@@ -1,5 +1,7 @@
+import { HttpService } from "@nestjs/axios";
 import { BadGatewayException, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import axiosRetry from "axios-retry";
 import { v4 as uuidv4 } from "uuid";
 import { JsonRpcResponse, McpResponse } from "./types/mcp.types";
 
@@ -8,8 +10,16 @@ export class McpService {
   private readonly logger = new Logger(McpService.name);
   private readonly mcpServerUrl: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly httpService: HttpService,
+  ) {
     this.mcpServerUrl = this.configService.getOrThrow<string>("MCP_SERVER_URL");
+
+    axiosRetry(this.httpService.axiosRef, {
+      retries: 3,
+      retryDelay: (retryCount) => axiosRetry.exponentialDelay(retryCount),
+    });
   }
 
   /**
@@ -23,12 +33,9 @@ export class McpService {
     this.logger.log(`MCP 서버 요청 시작 (JSON-RPC) - 텍스트 길이: ${text.length}`);
 
     try {
-      const response = await fetch(`${this.mcpServerUrl}/mcp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const response = await this.httpService.axiosRef.post<JsonRpcResponse>(
+        `${this.mcpServerUrl}/mcp`,
+        {
           jsonrpc: "2.0",
           id: uuidv4(),
           method: "tools/call",
@@ -36,15 +43,10 @@ export class McpService {
             name: "factcheck",
             arguments: { text },
           },
-        }),
-      });
+        },
+      );
 
-      if (!response.ok) {
-        this.logger.error(`MCP 서버 응답 실패: ${response.status} ${response.statusText}`);
-        throw new BadGatewayException("MCP_ERROR");
-      }
-
-      const jsonRpcResponse = (await response.json()) as unknown as JsonRpcResponse;
+      const jsonRpcResponse = response.data;
 
       if ("error" in jsonRpcResponse && jsonRpcResponse.error) {
         this.logger.error(`MCP RPC 에러: ${JSON.stringify(jsonRpcResponse.error)}`);
