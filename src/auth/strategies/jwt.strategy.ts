@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
-import { GuestJwtPayload, UserJwtPayload } from "../types/auth.types";
+import { GuestJwtPayload, JwtUser, UserJwtPayload } from "../types/auth.types";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
@@ -14,7 +14,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
     });
   }
 
-  validate(payload: UserJwtPayload | GuestJwtPayload) {
+  validate(payload: UserJwtPayload | GuestJwtPayload): JwtUser {
     if ("isGuest" in payload) {
       return {
         ip: payload.ip,

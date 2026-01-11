@@ -24,6 +24,7 @@ describe("FactCheckService", () => {
         startIndex: 10,
         endIndex: 30,
         verdict: "TRUE",
+        suggestion: null,
         sources: [{ title: "출처", url: "https://example.com" }],
       },
       {
@@ -32,12 +33,14 @@ describe("FactCheckService", () => {
         startIndex: 0,
         endIndex: 9,
         reason: "주관적 표현",
+        suggestion: null,
       },
       {
         type: "excluded",
         text: "제외될 문장",
         startIndex: 31,
         endIndex: 40,
+        suggestion: null,
       },
     ],
   };

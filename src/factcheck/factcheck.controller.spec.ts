@@ -2,6 +2,7 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import type { FactCheckResponse } from "./dto/factcheck-response.dto";
 import { FactCheckController } from "./factcheck.controller";
 import { FactCheckService } from "./factcheck.service";
+import type { FactCheckRequest } from "./types/factcheck.types";
 
 describe("FactCheckController", () => {
   let controller: FactCheckController;
@@ -18,6 +19,7 @@ describe("FactCheckController", () => {
         text: "검증 가능한 문장",
         position: 0,
         verdict: "TRUE",
+        suggestion: null,
         sources: [],
         status: "pending",
       },
@@ -56,7 +58,7 @@ describe("FactCheckController", () => {
         email: "test@example.com",
         isGuest: false as const,
       };
-      const mockRequest = { user: mockUser };
+      const mockRequest: FactCheckRequest = { user: mockUser };
       const dto = { text: "테스트 텍스트" };
 
       mockProcessFactCheck.mockResolvedValue(mockFactCheckResponse);
@@ -72,7 +74,7 @@ describe("FactCheckController", () => {
         ip: "192.168.1.1",
         isGuest: true as const,
       };
-      const mockRequest = { user: mockGuestUser };
+      const mockRequest: FactCheckRequest = { user: mockGuestUser };
       const dto = { text: "게스트 테스트" };
 
       mockProcessFactCheck.mockResolvedValue(mockFactCheckResponse);

@@ -11,6 +11,7 @@ import { FactCheckModule } from "./factcheck/factcheck.module";
 import { McpModule } from "./mcp/mcp.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RedisModule } from "./redis/redis.module";
+import { SettingsModule } from "./settings/settings.module";
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { RedisModule } from "./redis/redis.module";
     AuthModule,
     McpModule,
     FactCheckModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [
