@@ -14,12 +14,18 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { AuthGuard } from "@nestjs/passport";
 import { Cache } from "cache-manager";
-import type { Response } from "express";
 import { v4 as uuidv4 } from "uuid";
+import { GoogleUser } from "../common/decorators/google-user.decorator";
 import { Public } from "../common/decorators/public.decorator";
 import { AuthService } from "./auth.service";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
-import { isGuestUser, RequestWithGoogleUser, RequestWithUser } from "./types/auth.types";
+import {
+  GoogleProfile,
+  isGuestUser,
+  RedirectResponse,
+  RequestWithUser,
+  TokenResponse,
+} from "./types/auth.types";
 
 @Controller("auth")
 export class AuthController {
@@ -47,13 +53,13 @@ export class AuthController {
   @Get("google/callback")
   @Public()
   @UseGuards(AuthGuard("google"))
-  async googleAuthCallback(@Req() req: RequestWithGoogleUser, @Res() res: Response) {
+  async googleAuthCallback(@GoogleUser() user: GoogleProfile, @Res() res: RedirectResponse) {
     const frontendUrl = this.configService.getOrThrow<string>("FRONTEND_URL");
 
     try {
-      const { email, name, provider, providerId } = req.user;
+      const { email, name, provider, providerId } = user;
 
-      const user = await this.authService.validateOAuthLogin({
+      const authenticatedUser = await this.authService.validateOAuthLogin({
         email,
         name,
         provider,
@@ -62,7 +68,7 @@ export class AuthController {
 
       // 보안을 위해 토큰을 URL에 노출하지 않고, 일회용 코드로 교환
       const authCode = uuidv4();
-      await this.cacheManager.set(authCode, user.id, 60000); // 1분 유효
+      await this.cacheManager.set(authCode, authenticatedUser.id, 60000); // 1분 유효
 
       return res.redirect(`${frontendUrl}?code=${authCode}`);
     } catch {
@@ -76,7 +82,7 @@ export class AuthController {
    */
   @Post("token")
   @Public()
-  async exchangeToken(@Body("code") code: string, @Res() res: Response) {
+  async exchangeToken(@Body("code") code: string, @Res() res: TokenResponse) {
     const userId = await this.cacheManager.get<string>(code);
 
     if (!userId) {

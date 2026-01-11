@@ -2,26 +2,19 @@ import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
-import type { Response } from "express";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import type { RefreshTokenDto } from "./dto/refresh-token.dto";
-import type { GoogleProfile, RequestWithGoogleUser, TokenPair } from "./types/auth.types";
+import type { GoogleProfile, RedirectResponse, TokenPair, TokenResponse } from "./types/auth.types";
 
 jest.mock("uuid", () => ({
   v4: () => "mock-uuid",
 }));
 
-// MockResponse 인터페이스 정의로 Lint 에러 방지
-interface MockResponse extends Partial<Response> {
-  redirect: jest.Mock;
-  cookie: jest.Mock;
-  json: jest.Mock;
-}
-
 describe("AuthController", () => {
   let controller: AuthController;
-  let response: MockResponse;
+  let redirectResponse: RedirectResponse;
+  let tokenResponse: TokenResponse;
 
   const mockAuthService = {
     validateOAuthLogin: jest.fn(),
@@ -50,11 +43,14 @@ describe("AuthController", () => {
   };
 
   beforeEach(async () => {
-    response = {
+    redirectResponse = {
       redirect: jest.fn(),
+    };
+
+    tokenResponse = {
       cookie: jest.fn(),
       json: jest.fn(),
-    } as unknown as MockResponse;
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
@@ -73,34 +69,36 @@ describe("AuthController", () => {
   });
 
   describe("googleAuthCallback", () => {
-    const req = {
-      user: {
-        email: "test@example.com",
-        name: "Test User",
-        provider: "google",
-        providerId: "123",
-      } as GoogleProfile,
-    };
-
     const user = {
+      email: "test@example.com",
+      name: "Test User",
+      provider: "google",
+      providerId: "123",
+    } as GoogleProfile;
+
+    const authUser = {
       id: "user-id",
       email: "test@example.com",
     };
 
     it("should redirect to frontend with auth code on success", async () => {
       // given
-      mockAuthService.validateOAuthLogin.mockResolvedValue(user);
+      mockAuthService.validateOAuthLogin.mockResolvedValue(authUser);
 
       // when
-      await controller.googleAuthCallback(
-        req as unknown as RequestWithGoogleUser,
-        response as unknown as Response,
-      );
+      await controller.googleAuthCallback(user, redirectResponse);
 
       // then
-      expect(mockAuthService.validateOAuthLogin).toHaveBeenCalledWith(req.user);
-      expect(mockCacheManager.set).toHaveBeenCalledWith("mock-uuid", user.id, 60000);
-      expect(response.redirect).toHaveBeenCalledWith("http://localhost:5173?code=mock-uuid");
+      expect(mockAuthService.validateOAuthLogin).toHaveBeenCalledWith({
+        email: user.email,
+        name: user.name,
+        provider: user.provider,
+        providerId: user.providerId,
+      });
+      expect(mockCacheManager.set).toHaveBeenCalledWith("mock-uuid", authUser.id, 60000);
+      expect(redirectResponse.redirect).toHaveBeenCalledWith(
+        "http://localhost:5173?code=mock-uuid",
+      );
     });
 
     it("should redirect to login page with error on failure", async () => {
@@ -108,13 +106,10 @@ describe("AuthController", () => {
       mockAuthService.validateOAuthLogin.mockRejectedValue(new Error("Auth failed"));
 
       // when
-      await controller.googleAuthCallback(
-        req as unknown as RequestWithGoogleUser,
-        response as unknown as Response,
-      );
+      await controller.googleAuthCallback(user, redirectResponse);
 
       // then
-      expect(response.redirect).toHaveBeenCalledWith(
+      expect(redirectResponse.redirect).toHaveBeenCalledWith(
         "http://localhost:5173/login?error=oauth_failed",
       );
     });
@@ -135,20 +130,20 @@ describe("AuthController", () => {
       mockAuthService.generateUserTokens.mockReturnValue(tokens);
 
       // when
-      await controller.exchangeToken(code, response as unknown as Response);
+      await controller.exchangeToken(code, tokenResponse);
 
       // then
       expect(mockCacheManager.get).toHaveBeenCalledWith(code);
       expect(mockCacheManager.del).toHaveBeenCalledWith(code);
       expect(mockAuthService.findUserById).toHaveBeenCalledWith(user.id);
-      expect(response.cookie).toHaveBeenCalledWith("refreshToken", tokens.refreshToken, {
+      expect(tokenResponse.cookie).toHaveBeenCalledWith("refreshToken", tokens.refreshToken, {
         httpOnly: true,
         secure: false, // In test env
         sameSite: "lax",
         path: "/",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
-      expect(response.json).toHaveBeenCalledWith({ accessToken: tokens.accessToken });
+      expect(tokenResponse.json).toHaveBeenCalledWith({ accessToken: tokens.accessToken });
     });
 
     it("should throw UnauthorizedException if code is invalid", async () => {
@@ -156,7 +151,7 @@ describe("AuthController", () => {
       mockCacheManager.get.mockResolvedValue(null);
 
       // when & then
-      await expect(controller.exchangeToken(code, response as unknown as Response)).rejects.toThrow(
+      await expect(controller.exchangeToken(code, tokenResponse)).rejects.toThrow(
         UnauthorizedException,
       );
     });

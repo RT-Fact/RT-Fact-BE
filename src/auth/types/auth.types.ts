@@ -1,4 +1,4 @@
-import type { Request } from "express";
+import type { Request, Response } from "express";
 
 /**
  * User JWT 페이로드 구조
@@ -73,11 +73,11 @@ export interface RequestWithUser extends Request {
   user: JwtUser;
 }
 
-export function isGuestUser(user: JwtUser | GoogleProfile): user is GuestUser {
+export function isGuestUser(user: JwtUser): user is GuestUser {
   return "isGuest" in user && user.isGuest === true;
 }
 
-export function isAuthenticatedUser(user: JwtUser | GoogleProfile): user is AuthenticatedUser {
+export function isAuthenticatedUser(user: JwtUser): user is AuthenticatedUser {
   return "isGuest" in user && user.isGuest === false;
 }
 
@@ -87,3 +87,13 @@ export function isAuthenticatedUser(user: JwtUser | GoogleProfile): user is Auth
 export interface RequestWithGoogleUser extends Request {
   user: GoogleProfile;
 }
+
+/**
+ * 리다이렉션만 필요한 응답 타입 (googleAuthCallback용)
+ */
+export type RedirectResponse = Pick<Response, "redirect">;
+
+/**
+ * 쿠키 설정 및 JSON 응답이 필요한 응답 타입 (exchangeToken용)
+ */
+export type TokenResponse = Pick<Response, "cookie" | "json">;
