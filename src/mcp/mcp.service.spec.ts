@@ -1,7 +1,12 @@
 import { HttpService } from "@nestjs/axios";
-import { BadGatewayException } from "@nestjs/common";
+import {
+  BadGatewayException,
+  GatewayTimeoutException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
+import { AxiosError } from "axios";
 import { McpService } from "./mcp.service";
 import type { McpResponse } from "./types/mcp.types";
 
@@ -54,7 +59,7 @@ describe("McpService", () => {
           useValue: {
             axiosRef: {
               post: mockAxiosPost,
-              // axios-retry가 초기화 시 interceptors에 접근함
+              // axios-retry가 초기화 시 interceptors에 접근
               interceptors: {
                 request: { use: jest.fn() },
                 response: { use: jest.fn() },
@@ -74,7 +79,6 @@ describe("McpService", () => {
 
   describe("analyze", () => {
     it("정상 응답 시 McpResponse를 반환해야 한다", async () => {
-      // Arrange - Axios는 response.data로 직접 반환
       mockAxiosPost.mockResolvedValue({
         data: {
           jsonrpc: "2.0",
@@ -90,10 +94,8 @@ describe("McpService", () => {
         },
       });
 
-      // Act
       const result = await service.analyze("테스트 텍스트");
 
-      // Assert
       expect(result).toEqual(mockMcpResponse);
       expect(result.sentences).toHaveLength(2);
       expect(result.sentences[0].type).toBe("claim");
@@ -111,7 +113,6 @@ describe("McpService", () => {
     });
 
     it("서버가 500 에러를 반환하면 BadGatewayException을 던져야 한다", async () => {
-      // Arrange - Axios는 4xx/5xx에서 자동으로 에러 throw
       const axiosError = new Error("Request failed with status code 500");
       Object.assign(axiosError, {
         response: { status: 500, statusText: "Internal Server Error" },
@@ -119,17 +120,32 @@ describe("McpService", () => {
       });
       mockAxiosPost.mockRejectedValue(axiosError);
 
-      // Act & Assert
       await expect(service.analyze("테스트 텍스트")).rejects.toThrow(BadGatewayException);
       await expect(service.analyze("테스트 텍스트")).rejects.toThrow("MCP_ERROR");
     });
 
     it("네트워크 오류 시 BadGatewayException을 던져야 한다", async () => {
-      // Arrange
       mockAxiosPost.mockRejectedValue(new Error("Network error"));
 
-      // Act & Assert
       await expect(service.analyze("테스트 텍스트")).rejects.toThrow(BadGatewayException);
+    });
+
+    it("타임아웃 시 GatewayTimeoutException을 던져야 한다", async () => {
+      const axiosError = new AxiosError("timeout of 30000ms exceeded");
+      axiosError.code = "ECONNABORTED";
+      mockAxiosPost.mockRejectedValue(axiosError);
+
+      await expect(service.analyze("테스트 텍스트")).rejects.toThrow(GatewayTimeoutException);
+      await expect(service.analyze("테스트 텍스트")).rejects.toThrow("MCP_TIMEOUT");
+    });
+
+    it("연결 실패 시 ServiceUnavailableException을 던져야 한다", async () => {
+      const axiosError = new AxiosError("connect ECONNREFUSED");
+      axiosError.code = "ECONNREFUSED";
+      mockAxiosPost.mockRejectedValue(axiosError);
+
+      await expect(service.analyze("테스트 텍스트")).rejects.toThrow(ServiceUnavailableException);
+      await expect(service.analyze("테스트 텍스트")).rejects.toThrow("MCP_UNAVAILABLE");
     });
   });
 });

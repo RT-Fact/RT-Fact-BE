@@ -1,6 +1,13 @@
 import { HttpService } from "@nestjs/axios";
-import { BadGatewayException, Injectable, Logger } from "@nestjs/common";
+import {
+  BadGatewayException,
+  GatewayTimeoutException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { AxiosError } from "axios";
 import axiosRetry from "axios-retry";
 import { v4 as uuidv4 } from "uuid";
 import { JsonRpcResponse, McpResponse } from "./types/mcp.types";
@@ -78,7 +85,24 @@ export class McpService {
       }
 
       const elapsedTime = Date.now() - startTime;
-      this.logger.error(`MCP 서버 호출 중 오류 발생 (${elapsedTime}ms): ${error}`);
+
+      // Axios 에러 타입별 분류
+      if (error instanceof AxiosError) {
+        // 타임아웃
+        if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
+          this.logger.error(`MCP 서버 타임아웃 (${elapsedTime}ms)`);
+          throw new GatewayTimeoutException("MCP_TIMEOUT");
+        }
+
+        // 연결 실패 (서버 다운, DNS 실패 등)
+        if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
+          this.logger.error(`MCP 서버 연결 실패: ${error.code}`);
+          throw new ServiceUnavailableException("MCP_UNAVAILABLE");
+        }
+      }
+
+      // 기타 에러 (stack trace 포함)
+      this.logger.error(`MCP 서버 호출 중 오류 발생 (${elapsedTime}ms)`, error);
       throw new BadGatewayException("MCP_ERROR");
     }
   }
