@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { v4 as uuidv4 } from "uuid";
+import { ERROR_CODES } from "../common/constants/error-codes";
 import { PrismaService } from "../prisma/prisma.service";
 import { GuestRepository } from "./repositories/guest.repository";
 import { GoogleProfile, GuestJwtPayload, TokenPair, UserJwtPayload } from "./types/auth.types";
@@ -112,13 +113,13 @@ export class AuthService {
 
       if (!user) {
         this.logger.warn(`토큰 갱신 실패 - 사용자 없음 (ID: ${payload.id})`);
-        throw new UnauthorizedException("User not found");
+        throw new UnauthorizedException(ERROR_CODES.USER_NOT_FOUND);
       }
 
       return this.generateUserTokens(user.id, user.email);
     } catch {
       this.logger.warn("토큰 갱신 실패 - 유효하지 않은 리프레시 토큰");
-      throw new UnauthorizedException("Invalid refresh token");
+      throw new UnauthorizedException(ERROR_CODES.INVALID_REFRESH_TOKEN);
     }
   }
 

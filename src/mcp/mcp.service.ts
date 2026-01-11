@@ -10,6 +10,7 @@ import { ConfigService } from "@nestjs/config";
 import { AxiosError } from "axios";
 import axiosRetry from "axios-retry";
 import { v4 as uuidv4 } from "uuid";
+import { ERROR_CODES } from "../common/constants/error-codes";
 import { JsonRpcResponse, McpResponse } from "./types/mcp.types";
 
 @Injectable()
@@ -57,19 +58,19 @@ export class McpService {
 
       if ("error" in jsonRpcResponse && jsonRpcResponse.error) {
         this.logger.error(`MCP RPC 에러: ${JSON.stringify(jsonRpcResponse.error)}`);
-        throw new BadGatewayException("MCP_ERROR");
+        throw new BadGatewayException(ERROR_CODES.MCP_ERROR);
       }
 
       if (!jsonRpcResponse.result) {
         this.logger.error(`MCP 서버 응답에 result가 없습니다: ${JSON.stringify(jsonRpcResponse)}`);
-        throw new BadGatewayException("MCP_ERROR");
+        throw new BadGatewayException(ERROR_CODES.MCP_ERROR);
       }
 
       // 성공 응답: result.content[0].text에 JSON 문자열로 들어있음
       const content = jsonRpcResponse.result.content[0];
       if (!content || content.type !== "text") {
         this.logger.error("MCP 서버로부터 예상치 못한 응답 형식을 받았습니다.");
-        throw new BadGatewayException("MCP_ERROR");
+        throw new BadGatewayException(ERROR_CODES.MCP_ERROR);
       }
 
       const data = JSON.parse(content.text) as McpResponse;
@@ -86,24 +87,20 @@ export class McpService {
 
       const elapsedTime = Date.now() - startTime;
 
-      // Axios 에러 타입별 분류
       if (error instanceof AxiosError) {
-        // 타임아웃
         if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
           this.logger.error(`MCP 서버 타임아웃 (${elapsedTime}ms)`);
-          throw new GatewayTimeoutException("MCP_TIMEOUT");
+          throw new GatewayTimeoutException(ERROR_CODES.MCP_TIMEOUT);
         }
 
-        // 연결 실패 (서버 다운, DNS 실패 등)
         if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
           this.logger.error(`MCP 서버 연결 실패: ${error.code}`);
-          throw new ServiceUnavailableException("MCP_UNAVAILABLE");
+          throw new ServiceUnavailableException(ERROR_CODES.MCP_UNAVAILABLE);
         }
       }
 
-      // 기타 에러 (stack trace 포함)
       this.logger.error(`MCP 서버 호출 중 오류 발생 (${elapsedTime}ms)`, error);
-      throw new BadGatewayException("MCP_ERROR");
+      throw new BadGatewayException(ERROR_CODES.MCP_ERROR);
     }
   }
 }

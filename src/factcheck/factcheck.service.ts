@@ -9,6 +9,7 @@ import { ClaimStatus, type Sentence } from "@prisma/client";
 import { v4 as uuidv4 } from "uuid";
 import { GuestRepository } from "../auth/repositories/guest.repository";
 import type { AuthenticatedUser, JwtUser } from "../auth/types/auth.types";
+import { ERROR_CODES } from "../common/constants/error-codes";
 import { McpService } from "../mcp/mcp.service";
 import type { McpSentence } from "../mcp/types/mcp.types";
 import { CLAIM_STATUS_MAP } from "./constants";
@@ -44,14 +45,14 @@ export class FactCheckService {
 
     // 1. 빈 텍스트 검증
     if (!text || text.trim().length === 0) {
-      throw new BadRequestException("EMPTY_TEXT");
+      throw new BadRequestException(ERROR_CODES.EMPTY_TEXT);
     }
 
     // 2. 게스트 사용량 확인
     if (user.isGuest) {
       const guestInfo = await this.guestRepository.getGuestInfo(user.ip);
       if (!guestInfo || guestInfo.remainingUses <= 0) {
-        throw new ForbiddenException("GUEST_LIMIT_EXCEEDED");
+        throw new ForbiddenException(ERROR_CODES.GUEST_LIMIT_EXCEEDED);
       }
     }
 
@@ -228,10 +229,7 @@ export class FactCheckService {
     const factCheck = await this.factCheckRepository.findById(user.userId, factCheckId);
 
     if (!factCheck) {
-      throw new NotFoundException({
-        error: "FACTCHECK_NOT_FOUND",
-        message: "팩트체크 결과를 찾을 수 없습니다.",
-      });
+      throw new NotFoundException(ERROR_CODES.FACTCHECK_NOT_FOUND);
     }
 
     const sentences = factCheck.sentences.map((s) => this.transformDbSentenceToResponse(s));
@@ -255,10 +253,7 @@ export class FactCheckService {
     const deleted = await this.factCheckRepository.deleteById(user.userId, factCheckId);
 
     if (!deleted) {
-      throw new NotFoundException({
-        error: "FACTCHECK_NOT_FOUND",
-        message: "팩트체크 결과를 찾을 수 없습니다.",
-      });
+      throw new NotFoundException(ERROR_CODES.FACTCHECK_NOT_FOUND);
     }
 
     return { success: true };
@@ -300,10 +295,7 @@ export class FactCheckService {
     );
 
     if (!updated) {
-      throw new NotFoundException({
-        error: "CLAIM_NOT_FOUND",
-        message: "해당 항목을 찾을 수 없거나 이미 처리되었습니다.",
-      });
+      throw new NotFoundException(ERROR_CODES.CLAIM_NOT_FOUND);
     }
 
     return { id: claimId, status: statusValue };
