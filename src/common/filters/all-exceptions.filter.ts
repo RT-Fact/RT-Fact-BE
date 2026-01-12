@@ -43,7 +43,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       `${request.method} ${request.url} - ${status} - ${actualError.code}: ${actualError.message}`,
     );
 
-    if (isServerError && exception instanceof Error) {
+    if (isServerError && exception instanceof Error && !(exception instanceof HttpException)) {
       this.logger.error(exception.stack);
     } else if (exception instanceof Error && this.isDev) {
       this.logger.debug(exception.stack);
