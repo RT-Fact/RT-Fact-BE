@@ -11,7 +11,8 @@ import { AxiosError } from "axios";
 import axiosRetry from "axios-retry";
 import { v4 as uuidv4 } from "uuid";
 import { ERROR_CODES } from "../common/constants/error-codes";
-import { JsonRpcResponse, McpResponse } from "./types/mcp.types";
+import { JSON_RPC, MCP_CONFIG } from "./constants";
+import type { JsonRpcResponse, McpResponse } from "./types/mcp.types";
 
 @Injectable()
 export class McpService {
@@ -25,7 +26,7 @@ export class McpService {
     this.mcpServerUrl = this.configService.getOrThrow<string>("MCP_SERVER_URL");
 
     axiosRetry(this.httpService.axiosRef, {
-      retries: 3,
+      retries: MCP_CONFIG.RETRIES,
       retryDelay: (retryCount) => axiosRetry.exponentialDelay(retryCount),
     });
   }
@@ -44,11 +45,11 @@ export class McpService {
       const response = await this.httpService.axiosRef.post<JsonRpcResponse>(
         `${this.mcpServerUrl}/mcp`,
         {
-          jsonrpc: "2.0",
+          jsonrpc: JSON_RPC.VERSION,
           id: uuidv4(),
-          method: "tools/call",
+          method: JSON_RPC.METHOD,
           params: {
-            name: "factcheck",
+            name: JSON_RPC.TOOL_NAME,
             arguments: { text },
           },
         },
