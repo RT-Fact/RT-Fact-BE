@@ -2,11 +2,11 @@ import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { v4 as uuidv4 } from "uuid";
+import { ERROR_CODES } from "../common/constants/error-codes";
 import { PrismaService } from "../prisma/prisma.service";
+import { GUEST_CONFIG, JWT_EXPIRES } from "./constants";
 import { GuestRepository } from "./repositories/guest.repository";
-import { GoogleProfile, GuestJwtPayload, TokenPair, UserJwtPayload } from "./types/auth.types";
-
-// TODO: 상수들 어떻게 관리할지 결정을 내려야겠다.
+import type { GoogleProfile, GuestJwtPayload, TokenPair, UserJwtPayload } from "./types/auth.types";
 
 @Injectable()
 export class AuthService {
@@ -56,12 +56,12 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.getOrThrow<string>("JWT_SECRET"),
-      expiresIn: "1h",
+      expiresIn: JWT_EXPIRES.ACCESS,
     });
 
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.configService.getOrThrow<string>("JWT_REFRESH_SECRET"),
-      expiresIn: "7d",
+      expiresIn: JWT_EXPIRES.REFRESH,
     });
 
     return { accessToken, refreshToken };
@@ -76,7 +76,7 @@ export class AuthService {
 
     return this.jwtService.sign(payload, {
       secret: this.configService.getOrThrow<string>("JWT_SECRET"),
-      expiresIn: "7d",
+      expiresIn: JWT_EXPIRES.GUEST,
     });
   }
 
@@ -88,7 +88,7 @@ export class AuthService {
 
     if (existing) return existing;
 
-    const newGuest = { remainingUses: 3, createdAt: Date.now() };
+    const newGuest = { remainingUses: GUEST_CONFIG.INITIAL_USES, createdAt: Date.now() };
 
     await this.guestRepository.setGuestInfo(ip, newGuest);
     this.logger.log(`새 게스트 생성 - IP 해시: ${ip.substring(0, 8)}...`);
@@ -112,13 +112,13 @@ export class AuthService {
 
       if (!user) {
         this.logger.warn(`토큰 갱신 실패 - 사용자 없음 (ID: ${payload.id})`);
-        throw new UnauthorizedException("User not found");
+        throw new UnauthorizedException(ERROR_CODES.USER_NOT_FOUND);
       }
 
       return this.generateUserTokens(user.id, user.email);
     } catch {
       this.logger.warn("토큰 갱신 실패 - 유효하지 않은 리프레시 토큰");
-      throw new UnauthorizedException("Invalid refresh token");
+      throw new UnauthorizedException(ERROR_CODES.INVALID_REFRESH_TOKEN);
     }
   }
 

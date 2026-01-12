@@ -1,10 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { RedisService } from "../../redis/redis.service";
-import { GuestInfo } from "../types/auth.types";
+import { GUEST_CONFIG } from "../constants";
+import type { GuestInfo } from "../types/auth.types";
 import { hashIp } from "../utils/ip-hash.util";
-
-// TODO: 상수폴더를 생성해서 옮길지 환경변수로 뺄지 결정하기
-const DEFAULT_GUEST_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 @Injectable()
 export class GuestRepository {
@@ -31,7 +29,7 @@ export class GuestRepository {
   async setGuestInfo(
     ip: string,
     info: GuestInfo,
-    ttlSeconds: number = DEFAULT_GUEST_TTL_SECONDS,
+    ttlSeconds: number = GUEST_CONFIG.TTL_SECONDS,
   ): Promise<void> {
     const hashedIp = hashIp(ip);
     const key = `guest:${hashedIp}`;

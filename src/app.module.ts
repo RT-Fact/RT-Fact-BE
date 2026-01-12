@@ -1,12 +1,13 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 import * as Joi from "joi";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { AuthModule } from "./auth/auth.module";
 import { JwtAuthGuard } from "./auth/guards/jwt-auth.guard";
 import { LoginGuard } from "./auth/guards/login.guard";
+import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { FactCheckModule } from "./factcheck/factcheck.module";
 import { McpModule } from "./mcp/mcp.module";
 import { PrismaModule } from "./prisma/prisma.module";
@@ -48,6 +49,10 @@ import { SettingsModule } from "./settings/settings.module";
   controllers: [AppController],
   providers: [
     AppService,
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

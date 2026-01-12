@@ -15,6 +15,7 @@ import { ConfigService } from "@nestjs/config";
 import { AuthGuard } from "@nestjs/passport";
 import { Cache } from "cache-manager";
 import { v4 as uuidv4 } from "uuid";
+import { ERROR_CODES } from "../common/constants/error-codes";
 import { GoogleUser } from "../common/decorators/google-user.decorator";
 import { Public } from "../common/decorators/public.decorator";
 import { AuthService } from "./auth.service";
@@ -86,14 +87,14 @@ export class AuthController {
     const userId = await this.cacheManager.get<string>(code);
 
     if (!userId) {
-      throw new UnauthorizedException("Invalid or expired authorization code");
+      throw new UnauthorizedException(ERROR_CODES.INVALID_AUTH_CODE);
     }
 
     await this.cacheManager.del(code); // 일회용 코드 삭제
 
     const user = await this.authService.findUserById(userId);
     if (!user) {
-      throw new UnauthorizedException("User not found");
+      throw new UnauthorizedException(ERROR_CODES.USER_NOT_FOUND);
     }
 
     const tokens = this.authService.generateUserTokens(user.id, user.email);

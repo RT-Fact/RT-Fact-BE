@@ -5,6 +5,7 @@ import {
   type ExecutionContext,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
+import { ERROR_CODES } from "../../common/constants/error-codes";
 import { REQUIRE_LOGIN_KEY } from "../../common/decorators/require-login.decorator";
 import type { JwtUser } from "../types/auth.types";
 
@@ -26,10 +27,7 @@ export class LoginGuard implements CanActivate {
     const user = request.user;
 
     if (user.isGuest) {
-      throw new ForbiddenException({
-        error: "GUEST_NOT_ALLOWED",
-        message: "게스트는 이 기능을 이용할 수 없습니다.",
-      });
+      throw new ForbiddenException(ERROR_CODES.GUEST_NOT_ALLOWED);
     }
 
     return true;

@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { ConflictException, Injectable } from "@nestjs/common";
 import { ListType, Prisma } from "@prisma/client";
+import { ERROR_CODES } from "../common/constants/error-codes";
 import { DomainFilterRepository } from "./repositories/domain-filter.repository";
 
 @Injectable()
@@ -38,10 +39,7 @@ export class SettingsService {
       await this.repository.createFilter(userId, domain, listType);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new BadRequestException({
-          code: "DUPLICATE_DOMAIN",
-          message: "이미 등록된 도메인입니다",
-        });
+        throw new ConflictException(ERROR_CODES.DUPLICATE_DOMAIN);
       }
       throw error;
     }
@@ -65,10 +63,7 @@ export class SettingsService {
     const conflict = await this.repository.findFilter(userId, domain, conflictType);
 
     if (conflict) {
-      throw new BadRequestException({
-        code: "DOMAIN_CONFLICT",
-        message: `해당 도메인은 ${conflictType === ListType.WHITE ? "화이트리스트" : "블랙리스트"}에 이미 존재합니다.`,
-      });
+      throw new ConflictException(ERROR_CODES.DOMAIN_CONFLICT);
     }
   }
 }
