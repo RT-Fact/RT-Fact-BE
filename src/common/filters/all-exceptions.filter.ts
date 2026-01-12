@@ -102,12 +102,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private isValidationError(
     response: unknown,
   ): response is { message: string | string[]; error?: string } {
-    return (
-      typeof response === "object" &&
-      response !== null &&
-      "message" in response &&
-      (!("error" in response) || (response as { error?: string }).error === "Bad Request")
-    );
+    if (typeof response !== "object" || response === null) {
+      return false;
+    }
+  
+    if (!("message" in response)) {
+      return false;
+    }
+  
+    if ("error" in response) {
+      return (response as { error?: string }).error === "Bad Request";
+    }
+  
+    return true;
   }
 
   /**
