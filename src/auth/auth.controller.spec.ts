@@ -4,8 +4,14 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { RedisService } from "../redis/redis.service";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
-import type { RefreshTokenDto } from "./dto/refresh-token.dto";
-import type { GoogleProfile, RedirectResponse, TokenPair, TokenResponse } from "./types/auth.types";
+import { REFRESH_TOKEN_TTL_MS } from "./constants";
+import type {
+  GoogleProfile,
+  RedirectResponse,
+  RequestWithUser,
+  TokenPair,
+  TokenResponse,
+} from "./types/auth.types";
 
 jest.mock("uuid", () => ({
   v4: () => "mock-uuid",
@@ -141,11 +147,10 @@ describe("AuthController", () => {
         secure: false, // In test env
         sameSite: "lax",
         path: "/",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: REFRESH_TOKEN_TTL_MS,
       });
       expect(tokenResponse.json).toHaveBeenCalledWith({
         accessToken: tokens.accessToken,
-        user: user,
       });
     });
 
@@ -161,25 +166,44 @@ describe("AuthController", () => {
   });
 
   describe("refresh", () => {
-    const refreshTokenDto: RefreshTokenDto = {
-      refreshToken: "valid-refresh-token",
-    };
-
     const tokens: TokenPair = {
       accessToken: "new-access-token",
       refreshToken: "new-refresh-token",
     };
 
-    it("리프레시 토큰이 유효하면 새 토큰을 반환해야 합니다", async () => {
+    it("리프레시 토큰이 유효하면 새 토큰을 쿠키로 설정하고 액세스 토큰을 반환해야 합니다", async () => {
       // given
+      const req = Object.assign({} as RequestWithUser, {
+        cookies: {
+          refreshToken: "valid-refresh-token",
+        },
+      });
+
       mockAuthService.refreshTokens.mockResolvedValue(tokens);
 
       // when
-      const result = await controller.refresh(refreshTokenDto);
+      await controller.refresh(req, tokenResponse);
 
       // then
-      expect(result).toEqual(tokens);
-      expect(mockAuthService.refreshTokens).toHaveBeenCalledWith(refreshTokenDto.refreshToken);
+      expect(mockAuthService.refreshTokens).toHaveBeenCalledWith("valid-refresh-token");
+      expect(tokenResponse.cookie).toHaveBeenCalledWith("refreshToken", tokens.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: REFRESH_TOKEN_TTL_MS,
+      });
+      expect(tokenResponse.json).toHaveBeenCalledWith({ accessToken: tokens.accessToken });
+    });
+
+    it("리프레시 토큰이 쿠키에 없으면 UnauthorizedException을 던져야 합니다", async () => {
+      // given
+      const req = Object.assign({} as RequestWithUser, {
+        cookies: {},
+      });
+
+      // when & then
+      await expect(controller.refresh(req, tokenResponse)).rejects.toThrow(UnauthorizedException);
     });
   });
 

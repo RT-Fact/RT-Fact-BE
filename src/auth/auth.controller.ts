@@ -20,7 +20,6 @@ import { RequireLogin } from "../common/decorators/require-login.decorator";
 import { RedisService } from "../redis/redis.service";
 import { AuthService } from "./auth.service";
 import { REFRESH_TOKEN_TTL_MS } from "./constants";
-import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import {
   GoogleProfile,
   isGuestUser,
@@ -115,10 +114,7 @@ export class AuthController {
     });
 
     // Access Token은 Body로 반환
-    return res.json({
-      accessToken: tokens.accessToken,
-      user: user,
-    });
+    return res.json({ accessToken: tokens.accessToken });
   }
 
   /**
@@ -127,8 +123,25 @@ export class AuthController {
    */
   @Post("refresh")
   @Public()
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refreshTokens(refreshTokenDto.refreshToken);
+  async refresh(@Req() req: RequestWithUser, @Res() res: TokenResponse) {
+    const refreshToken = req.cookies["refreshToken"] as string | undefined;
+
+    if (!refreshToken) {
+      throw new UnauthorizedException(ERROR_CODES.INVALID_REFRESH_TOKEN);
+    }
+
+    const tokens = await this.authService.refreshTokens(refreshToken);
+
+    // 새로운 Refresh Token을 쿠키로 설정 (Rotation)
+    res.cookie("refreshToken", tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: REFRESH_TOKEN_TTL_MS,
+    });
+
+    return res.json({ accessToken: tokens.accessToken });
   }
 
   /**

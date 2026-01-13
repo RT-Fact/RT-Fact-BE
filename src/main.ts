@@ -1,5 +1,6 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
@@ -19,8 +20,11 @@ async function bootstrap() {
     }),
   );
 
+  app.use(cookieParser());
+
   await app.listen(process.env.PORT ?? 3000);
 }
+
 bootstrap().catch((err: unknown) => {
   console.error("Application failed to start:", err);
   process.exit(1);

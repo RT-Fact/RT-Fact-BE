@@ -134,6 +134,13 @@ describe("AuthController (e2e)", () => {
         .expect(201);
 
       expect(response.body).toHaveProperty("accessToken");
+
+      const cookies = response.headers["set-cookie"];
+      expect(cookies).toBeDefined();
+      expect(Array.isArray(cookies)).toBe(true);
+      expect(
+        (cookies as unknown as string[]).some((c: string) => c.startsWith("refreshToken=")),
+      ).toBe(true);
     });
 
     it("should fail with invalid code", async () => {
@@ -145,7 +152,7 @@ describe("AuthController (e2e)", () => {
   });
 
   describe("/auth/refresh (POST)", () => {
-    it("should return new tokens with valid refresh token", async () => {
+    it("should return new tokens with valid refresh token (Cookie)", async () => {
       // 1. 테스트 유저 생성
       const user = await prismaService.user.create({
         data: {
@@ -156,21 +163,33 @@ describe("AuthController (e2e)", () => {
         },
       });
 
-      // 2. 유효한 Refresh Token 생성 및 Redis 저장 (필수!)
+      // 2. 유효한 Refresh Token 생성 및 Redis 저장
       const tokens = authService.generateUserTokens(user.id, user.email);
       const refreshToken = tokens.refreshToken;
       await redisService.set(`rt:${user.id}`, refreshToken, REFRESH_TOKEN_TTL_MS);
 
-      // 3. 갱신 요청
+      // 3. 갱신 요청 (Cookie 사용)
       const response: Response = await request(app.getHttpServer() as Server)
         .post("/auth/refresh")
-        .send({ refreshToken })
+        .set("Cookie", [`refreshToken=${refreshToken}`])
         .expect(201);
 
       expect(response.body).toHaveProperty("accessToken");
-      expect(response.body).toHaveProperty("refreshToken");
 
-      const newRefreshToken = (response.body as Record<string, string>).refreshToken;
+      // 4. 새로운 Refresh Token이 쿠키로 설정되었는지 확인
+      const cookies = response.headers["set-cookie"];
+      expect(cookies).toBeDefined();
+      expect(Array.isArray(cookies)).toBe(true);
+      const newRefreshTokenCookie = (cookies as unknown as string[]).find((c: string) =>
+        c.startsWith("refreshToken="),
+      );
+      expect(newRefreshTokenCookie).toBeDefined();
+
+      if (!newRefreshTokenCookie) {
+        throw new Error("Refresh Token cookie not found");
+      }
+
+      const newRefreshToken = newRefreshTokenCookie.split(";")[0].split("=")[1];
       expect(newRefreshToken).not.toBe(refreshToken);
 
       // Redis에 새로운 Refresh Token이 저장되었는지 확인 (Rotation 검증)
@@ -179,7 +198,6 @@ describe("AuthController (e2e)", () => {
     });
 
     it("should return 401 if refresh token is not in Redis (Safe Logout/Expiration)", async () => {
-      // 1. 테스트 유저 생성
       const user = await prismaService.user.create({
         data: {
           email: "test@example.com",
@@ -189,20 +207,16 @@ describe("AuthController (e2e)", () => {
         },
       });
 
-      // 2. Refresh Token 생성하지만 Redis에는 저장 안 함 (또는 삭제됨)
       const tokens = authService.generateUserTokens(user.id, user.email);
       const refreshToken = tokens.refreshToken;
-      // await redisService.del(`rt:${user.id}`); // 확실히 없음
 
-      // 3. 갱신 요청 -> 실패해야 함
       await request(app.getHttpServer() as Server)
         .post("/auth/refresh")
-        .send({ refreshToken })
+        .set("Cookie", [`refreshToken=${refreshToken}`])
         .expect(401);
     });
 
     it("should return 401 if refresh token mismatches (Reuse Attempt)", async () => {
-      // 1. 테스트 유저 생성
       const user = await prismaService.user.create({
         data: {
           email: "test@example.com",
@@ -212,24 +226,21 @@ describe("AuthController (e2e)", () => {
         },
       });
 
-      // 2. Refresh Token A 생성 및 Redis 저장
       const tokensA = authService.generateUserTokens(user.id, user.email);
       await redisService.set(`rt:${user.id}`, tokensA.refreshToken, REFRESH_TOKEN_TTL_MS);
 
-      // 3. Refresh Token B 생성 (서명은 유효하지만 Redis 값과 다름)
       const tokensB = authService.generateUserTokens(user.id, user.email);
 
-      // 4. Token B로 갱신 요청 -> 실패해야 함
       await request(app.getHttpServer() as Server)
         .post("/auth/refresh")
-        .send({ refreshToken: tokensB.refreshToken })
+        .set("Cookie", [`refreshToken=${tokensB.refreshToken}`])
         .expect(401);
     });
 
     it("should return 401 with invalid refresh token signature", async () => {
       await request(app.getHttpServer() as Server)
         .post("/auth/refresh")
-        .send({ refreshToken: "invalid-token" })
+        .set("Cookie", ["refreshToken=invalid-token"])
         .expect(401);
     });
   });
