@@ -21,6 +21,7 @@ import { RedisService } from "../redis/redis.service";
 import { AuthService } from "./auth.service";
 import { REFRESH_TOKEN_TTL_MS } from "./constants";
 import {
+  AuthenticatedUser,
   GoogleProfile,
   isGuestUser,
   LogoutResponse,
@@ -173,13 +174,16 @@ export class AuthController {
    */
   @Post("logout")
   @RequireLogin()
-  logout(@Res() res: LogoutResponse) {
+  async logout(@Req() req: RequestWithUser, @Res() res: LogoutResponse) {
     res.clearCookie("refreshToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
     });
+
+    const user = req.user as AuthenticatedUser;
+    await this.redisService.del(`rt:${user.userId}`);
 
     return res.json({ message: "로그아웃 되었습니다." });
   }

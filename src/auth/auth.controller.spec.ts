@@ -6,7 +6,9 @@ import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { REFRESH_TOKEN_TTL_MS } from "./constants";
 import type {
+  AuthenticatedUser,
   GoogleProfile,
+  LogoutResponse,
   RedirectResponse,
   RequestWithUser,
   TokenPair,
@@ -204,6 +206,37 @@ describe("AuthController", () => {
 
       // when & then
       await expect(controller.refresh(req, tokenResponse)).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe("logout", () => {
+    it("쿠키를 지우고 Redis에서 리프레시 토큰을 삭제해야 합니다", async () => {
+      // given
+      const req = Object.assign({} as RequestWithUser, {
+        user: {
+          userId: "user-id",
+          email: "test@example.com",
+          isGuest: false,
+        } as AuthenticatedUser,
+      });
+
+      const logoutResponse: LogoutResponse = {
+        clearCookie: jest.fn(),
+        json: jest.fn(),
+      };
+
+      // when
+      await controller.logout(req, logoutResponse);
+
+      // then
+      expect(logoutResponse.clearCookie).toHaveBeenCalledWith("refreshToken", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+      });
+      expect(mockRedisService.del).toHaveBeenCalledWith("rt:user-id");
+      expect(logoutResponse.json).toHaveBeenCalledWith({ message: "로그아웃 되었습니다." });
     });
   });
 
