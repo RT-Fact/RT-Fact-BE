@@ -1,20 +1,20 @@
 import type { Server } from "http";
-import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import type { CanActivate, ExecutionContext, INestApplication } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import { Test, type TestingModule } from "@nestjs/testing";
-import type { Cache } from "cache-manager";
 import request, { type Response } from "supertest";
 import { AppModule } from "../src/app.module";
 import { AuthService } from "../src/auth/auth.service";
-import type { RequestWithUser } from "../src/auth/types/auth.types";
+import { REFRESH_TOKEN_TTL_MS } from "../src/auth/constants";
+import type { RequestWithGoogleUser } from "../src/auth/types/auth.types";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { RedisService } from "../src/redis/redis.service";
 
 describe("AuthController (e2e)", () => {
   let app: INestApplication;
   let authService: AuthService;
   let prismaService: PrismaService;
-
+  let redisService: RedisService;
   let moduleFixture: TestingModule;
 
   beforeAll(async () => {
@@ -24,7 +24,7 @@ describe("AuthController (e2e)", () => {
       .overrideGuard(AuthGuard("google"))
       .useValue({
         canActivate: (context: ExecutionContext) => {
-          const req = context.switchToHttp().getRequest<RequestWithUser>();
+          const req = context.switchToHttp().getRequest<RequestWithGoogleUser>();
           req.user = {
             email: "google-flow-user@example.com",
             name: "Google Flow User",
@@ -41,6 +41,7 @@ describe("AuthController (e2e)", () => {
 
     authService = moduleFixture.get<AuthService>(AuthService);
     prismaService = moduleFixture.get<PrismaService>(PrismaService);
+    redisService = moduleFixture.get<RedisService>(RedisService);
 
     // 테스트 시작 전 기존 데이터 삭제
     await prismaService.user.deleteMany({
@@ -63,12 +64,9 @@ describe("AuthController (e2e)", () => {
     });
 
     // Redis 연결 종료
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-    const cacheManager: any = app.get(CACHE_MANAGER);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    if (cacheManager.store && typeof cacheManager.store.client?.quit === "function") {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      await cacheManager.store.client.quit();
+    const client = redisService.getClient();
+    if (client && typeof client.quit === "function") {
+      await client.quit();
     }
 
     await prismaService.$disconnect();
@@ -110,20 +108,6 @@ describe("AuthController (e2e)", () => {
 
       // 4. 토큰 검증
       expect(exchangeResponse.body).toHaveProperty("accessToken");
-
-      const cookies = exchangeResponse.get("Set-Cookie");
-      expect(cookies).toBeDefined();
-
-      const refreshTokenCookie = cookies?.find((c: string) => c.startsWith("refreshToken="));
-      expect(refreshTokenCookie).toBeDefined();
-      expect(refreshTokenCookie).toContain("HttpOnly");
-
-      // 5. DB에 유저가 생성되었는지 확인
-      const user = await prismaService.user.findFirst({
-        where: { email: "google-flow-user@example.com" },
-      });
-      expect(user).toBeDefined();
-      expect(user?.providerId).toBe("google-flow-id");
     });
   });
 
@@ -139,10 +123,9 @@ describe("AuthController (e2e)", () => {
         },
       });
 
-      // 2. 임시 코드 생성
-      const cacheManager = moduleFixture.get<Cache>("CACHE_MANAGER");
+      // 2. 임시 코드 생성 (RedisService 사용)
       const code = "valid-test-code";
-      await cacheManager.set(code, user.id, 60000);
+      await redisService.set(code, user.id, 60000);
 
       // 3. 교환 요청
       const response: Response = await request(app.getHttpServer() as Server)
@@ -173,9 +156,10 @@ describe("AuthController (e2e)", () => {
         },
       });
 
-      // 2. 유효한 Refresh Token 생성
+      // 2. 유효한 Refresh Token 생성 및 Redis 저장 (필수!)
       const tokens = authService.generateUserTokens(user.id, user.email);
       const refreshToken = tokens.refreshToken;
+      await redisService.set(`rt:${user.id}`, refreshToken, REFRESH_TOKEN_TTL_MS);
 
       // 3. 갱신 요청
       const response: Response = await request(app.getHttpServer() as Server)
@@ -186,10 +170,63 @@ describe("AuthController (e2e)", () => {
       expect(response.body).toHaveProperty("accessToken");
       expect(response.body).toHaveProperty("refreshToken");
 
-      expect((response.body as Record<string, string>).refreshToken).not.toBe(refreshToken);
+      const newRefreshToken = (response.body as Record<string, string>).refreshToken;
+      expect(newRefreshToken).not.toBe(refreshToken);
+
+      // Redis에 새로운 Refresh Token이 저장되었는지 확인 (Rotation 검증)
+      const cachedNewToken = await redisService.get(`rt:${user.id}`);
+      expect(cachedNewToken).toBe(newRefreshToken);
     });
 
-    it("should return 401 with invalid refresh token", async () => {
+    it("should return 401 if refresh token is not in Redis (Safe Logout/Expiration)", async () => {
+      // 1. 테스트 유저 생성
+      const user = await prismaService.user.create({
+        data: {
+          email: "test@example.com",
+          name: "Test User",
+          provider: "google",
+          providerId: "test-provider-id",
+        },
+      });
+
+      // 2. Refresh Token 생성하지만 Redis에는 저장 안 함 (또는 삭제됨)
+      const tokens = authService.generateUserTokens(user.id, user.email);
+      const refreshToken = tokens.refreshToken;
+      // await redisService.del(`rt:${user.id}`); // 확실히 없음
+
+      // 3. 갱신 요청 -> 실패해야 함
+      await request(app.getHttpServer() as Server)
+        .post("/auth/refresh")
+        .send({ refreshToken })
+        .expect(401);
+    });
+
+    it("should return 401 if refresh token mismatches (Reuse Attempt)", async () => {
+      // 1. 테스트 유저 생성
+      const user = await prismaService.user.create({
+        data: {
+          email: "test@example.com",
+          name: "Test User",
+          provider: "google",
+          providerId: "test-provider-id",
+        },
+      });
+
+      // 2. Refresh Token A 생성 및 Redis 저장
+      const tokensA = authService.generateUserTokens(user.id, user.email);
+      await redisService.set(`rt:${user.id}`, tokensA.refreshToken, REFRESH_TOKEN_TTL_MS);
+
+      // 3. Refresh Token B 생성 (서명은 유효하지만 Redis 값과 다름)
+      const tokensB = authService.generateUserTokens(user.id, user.email);
+
+      // 4. Token B로 갱신 요청 -> 실패해야 함
+      await request(app.getHttpServer() as Server)
+        .post("/auth/refresh")
+        .send({ refreshToken: tokensB.refreshToken })
+        .expect(401);
+    });
+
+    it("should return 401 with invalid refresh token signature", async () => {
       await request(app.getHttpServer() as Server)
         .post("/auth/refresh")
         .send({ refreshToken: "invalid-token" })

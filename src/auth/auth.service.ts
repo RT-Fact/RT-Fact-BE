@@ -4,7 +4,8 @@ import { JwtService } from "@nestjs/jwt";
 import { v4 as uuidv4 } from "uuid";
 import { ERROR_CODES } from "../common/constants/error-codes";
 import { PrismaService } from "../prisma/prisma.service";
-import { GUEST_CONFIG, JWT_EXPIRES } from "./constants";
+import { RedisService } from "../redis/redis.service";
+import { GUEST_CONFIG, JWT_EXPIRES, REFRESH_TOKEN_TTL_MS } from "./constants";
 import { GuestRepository } from "./repositories/guest.repository";
 import type { GoogleProfile, GuestJwtPayload, TokenPair, UserJwtPayload } from "./types/auth.types";
 
@@ -17,6 +18,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly guestRepository: GuestRepository,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -106,6 +108,14 @@ export class AuthService {
         secret: this.configService.getOrThrow<string>("JWT_REFRESH_SECRET"),
       });
 
+      // Redis에서 저장된 Refresh Token 확인 (Multi-device 로그인 제한 / 탈취 감지)
+      const cachedRefreshToken = await this.redisService.get(`rt:${payload.id}`);
+
+      if (!cachedRefreshToken || cachedRefreshToken !== refreshToken) {
+        this.logger.warn(`토큰 갱신 실패 - Redis 토큰 불일치 (ID: ${payload.id})`);
+        throw new UnauthorizedException(ERROR_CODES.INVALID_REFRESH_TOKEN);
+      }
+
       const user = await this.prisma.user.findUnique({
         where: { id: payload.id },
       });
@@ -115,7 +125,10 @@ export class AuthService {
         throw new UnauthorizedException(ERROR_CODES.USER_NOT_FOUND);
       }
 
-      return this.generateUserTokens(user.id, user.email);
+      const tokens = this.generateUserTokens(user.id, user.email);
+      await this.redisService.set(`rt:${user.id}`, tokens.refreshToken, REFRESH_TOKEN_TTL_MS);
+
+      return tokens;
     } catch {
       this.logger.warn("토큰 갱신 실패 - 유효하지 않은 리프레시 토큰");
       throw new UnauthorizedException(ERROR_CODES.INVALID_REFRESH_TOKEN);

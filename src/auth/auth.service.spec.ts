@@ -3,7 +3,9 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { PrismaService } from "../prisma/prisma.service";
+import { RedisService } from "../redis/redis.service";
 import { AuthService } from "./auth.service";
+import { REFRESH_TOKEN_TTL_MS } from "./constants";
 import { GuestRepository } from "./repositories/guest.repository";
 import type { GoogleProfile, UserJwtPayload } from "./types/auth.types";
 
@@ -43,6 +45,11 @@ describe("AuthService", () => {
     setGuestInfo: jest.fn(),
   };
 
+  const mockRedisService = {
+    get: jest.fn(),
+    set: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -51,6 +58,7 @@ describe("AuthService", () => {
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: GuestRepository, useValue: mockGuestRepository },
+        { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
 
@@ -61,7 +69,7 @@ describe("AuthService", () => {
     jest.clearAllMocks();
   });
 
-  it("should be defined", () => {
+  it("정의되어 있어야 합니다", () => {
     expect(service).toBeDefined();
   });
 
@@ -73,7 +81,7 @@ describe("AuthService", () => {
       providerId: "123",
     };
 
-    it("should return user (create or update) using upsert", async () => {
+    it("upsert를 사용하여 사용자(생성 또는 업데이트)를 반환해야 합니다", async () => {
       // given
       mockPrismaService.user.upsert.mockResolvedValue(profile);
 
@@ -95,7 +103,7 @@ describe("AuthService", () => {
   });
 
   describe("generateUserTokens", () => {
-    it("should return access and refresh tokens", () => {
+    it("액세스 토큰과 리프레시 토큰을 반환해야 합니다", () => {
       // given
       mockJwtService.sign.mockReturnValue("mock-token");
 
@@ -112,7 +120,7 @@ describe("AuthService", () => {
   });
 
   describe("generateGuestToken", () => {
-    it("should return access token", () => {
+    it("액세스 토큰을 반환해야 합니다", () => {
       // given
       mockJwtService.sign.mockReturnValue("mock-guest-token");
 
@@ -126,11 +134,12 @@ describe("AuthService", () => {
 
   describe("refreshTokens", () => {
     const refreshToken = "valid-refresh-token";
-    const payload: UserJwtPayload = { id: "user-id", email: "test@example.com" };
+    const payload: UserJwtPayload = { id: "user-id", email: "test@example.com", jti: "uuid" };
 
-    it("should return new tokens if refresh token is valid", async () => {
+    it("리프레시 토큰이 유효하고 Redis와 일치하면 새 토큰을 반환해야 합니다", async () => {
       // given
       mockJwtService.verify.mockReturnValue(payload);
+      mockRedisService.get.mockResolvedValue(refreshToken); // Redis와 일치
       mockPrismaService.user.findUnique.mockResolvedValue({
         id: "user-id",
         email: "test@example.com",
@@ -145,9 +154,33 @@ describe("AuthService", () => {
         accessToken: "new-mock-token",
         refreshToken: "new-mock-token",
       });
+      expect(mockRedisService.get).toHaveBeenCalledWith(`rt:${payload.id}`);
+      expect(mockRedisService.set).toHaveBeenCalledWith(
+        `rt:${payload.id}`,
+        "new-mock-token",
+        REFRESH_TOKEN_TTL_MS,
+      );
     });
 
-    it("should throw UnauthorizedException if verify fails", async () => {
+    it("토큰이 Redis에 없으면 UnauthorizedException을 던져야 합니다", async () => {
+      // given
+      mockJwtService.verify.mockReturnValue(payload);
+      mockRedisService.get.mockResolvedValue(null); // Redis에 없음 (만료/삭제됨)
+
+      // when & then
+      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it("토큰이 일치하지 않으면(재사용 시도) UnauthorizedException을 던져야 합니다", async () => {
+      // given
+      mockJwtService.verify.mockReturnValue(payload);
+      mockRedisService.get.mockResolvedValue("different-token"); // Redis 값과 다름
+
+      // when & then
+      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it("검증에 실패하면 UnauthorizedException을 던져야 합니다", async () => {
       // given
       mockJwtService.verify.mockImplementation(() => {
         throw new Error();
@@ -157,9 +190,10 @@ describe("AuthService", () => {
       await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
     });
 
-    it("should throw UnauthorizedException if user not found", async () => {
+    it("사용자를 찾을 수 없으면 UnauthorizedException을 던져야 합니다", async () => {
       // given
       mockJwtService.verify.mockReturnValue(payload);
+      mockRedisService.get.mockResolvedValue(refreshToken);
       mockPrismaService.user.findUnique.mockResolvedValue(null);
 
       // when & then

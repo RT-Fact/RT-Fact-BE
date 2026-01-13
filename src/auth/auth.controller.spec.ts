@@ -1,7 +1,7 @@
-import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
+import { RedisService } from "../redis/redis.service";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import type { RefreshTokenDto } from "./dto/refresh-token.dto";
@@ -25,7 +25,7 @@ describe("AuthController", () => {
     generateGuestToken: jest.fn(),
   };
 
-  const mockCacheManager = {
+  const mockRedisService = {
     set: jest.fn(),
     get: jest.fn(),
     del: jest.fn(),
@@ -57,14 +57,14 @@ describe("AuthController", () => {
       providers: [
         { provide: AuthService, useValue: mockAuthService },
         { provide: ConfigService, useValue: mockConfigService },
-        { provide: CACHE_MANAGER, useValue: mockCacheManager },
+        { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
   });
 
-  it("should be defined", () => {
+  it("정의되어 있어야 합니다", () => {
     expect(controller).toBeDefined();
   });
 
@@ -81,7 +81,7 @@ describe("AuthController", () => {
       email: "test@example.com",
     };
 
-    it("should redirect to frontend with auth code on success", async () => {
+    it("성공 시 인증 코드와 함께 프론트엔드로 리다이렉트되어야 합니다", async () => {
       // given
       mockAuthService.validateOAuthLogin.mockResolvedValue(authUser);
 
@@ -95,13 +95,13 @@ describe("AuthController", () => {
         provider: user.provider,
         providerId: user.providerId,
       });
-      expect(mockCacheManager.set).toHaveBeenCalledWith("mock-uuid", authUser.id, 60000);
+      expect(mockRedisService.set).toHaveBeenCalledWith("mock-uuid", authUser.id, 60000);
       expect(redirectResponse.redirect).toHaveBeenCalledWith(
-        "http://localhost:5173?code=mock-uuid",
+        "http://localhost:5173/auth/callback?code=mock-uuid",
       );
     });
 
-    it("should redirect to login page with error on failure", async () => {
+    it("실패 시 에러와 함께 로그인 페이지로 리다이렉트되어야 합니다", async () => {
       // given
       mockAuthService.validateOAuthLogin.mockRejectedValue(new Error("Auth failed"));
 
@@ -123,9 +123,9 @@ describe("AuthController", () => {
       refreshToken: "refresh-token",
     };
 
-    it("should return tokens if code is valid", async () => {
+    it("코드가 유효하면 토큰을 반환해야 합니다", async () => {
       // given
-      mockCacheManager.get.mockResolvedValue(user.id);
+      mockRedisService.get.mockResolvedValue(user.id);
       mockAuthService.findUserById.mockResolvedValue(user);
       mockAuthService.generateUserTokens.mockReturnValue(tokens);
 
@@ -133,8 +133,8 @@ describe("AuthController", () => {
       await controller.exchangeToken(code, tokenResponse);
 
       // then
-      expect(mockCacheManager.get).toHaveBeenCalledWith(code);
-      expect(mockCacheManager.del).toHaveBeenCalledWith(code);
+      expect(mockRedisService.get).toHaveBeenCalledWith(code);
+      expect(mockRedisService.del).toHaveBeenCalledWith(code);
       expect(mockAuthService.findUserById).toHaveBeenCalledWith(user.id);
       expect(tokenResponse.cookie).toHaveBeenCalledWith("refreshToken", tokens.refreshToken, {
         httpOnly: true,
@@ -143,12 +143,15 @@ describe("AuthController", () => {
         path: "/",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
-      expect(tokenResponse.json).toHaveBeenCalledWith({ accessToken: tokens.accessToken });
+      expect(tokenResponse.json).toHaveBeenCalledWith({
+        accessToken: tokens.accessToken,
+        user: user,
+      });
     });
 
-    it("should throw UnauthorizedException if code is invalid", async () => {
+    it("코드가 유효하지 않으면 UnauthorizedException을 던져야 합니다", async () => {
       // given
-      mockCacheManager.get.mockResolvedValue(null);
+      mockRedisService.get.mockResolvedValue(null);
 
       // when & then
       await expect(controller.exchangeToken(code, tokenResponse)).rejects.toThrow(
@@ -167,7 +170,7 @@ describe("AuthController", () => {
       refreshToken: "new-refresh-token",
     };
 
-    it("should return new tokens if refresh token is valid", async () => {
+    it("리프레시 토큰이 유효하면 새 토큰을 반환해야 합니다", async () => {
       // given
       mockAuthService.refreshTokens.mockResolvedValue(tokens);
 
@@ -181,7 +184,7 @@ describe("AuthController", () => {
   });
 
   describe("me", () => {
-    it("should return guest info if user is guest", async () => {
+    it("사용자가 게스트라면 게스트 정보를 반환해야 합니다", async () => {
       const req = {
         user: { isGuest: true, ip: "127.0.0.1" },
       } as unknown as Parameters<typeof controller.me>[0];
@@ -197,7 +200,7 @@ describe("AuthController", () => {
       expect(result).toEqual({ isGuest: true, remainingUses: 3 });
     });
 
-    it("should return user info if user is authenticated", async () => {
+    it("사용자가 인증되었다면 사용자 정보를 반환해야 합니다", async () => {
       const req = {
         user: { isGuest: false, userId: "user-id", email: "test@example.com" },
       } as unknown as Parameters<typeof controller.me>[0];

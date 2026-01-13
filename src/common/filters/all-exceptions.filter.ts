@@ -105,15 +105,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (typeof response !== "object" || response === null) {
       return false;
     }
-  
+
     if (!("message" in response)) {
       return false;
     }
-  
+
     if ("error" in response) {
       return (response as { error?: string }).error === "Bad Request";
     }
-  
+
     return true;
   }
 
