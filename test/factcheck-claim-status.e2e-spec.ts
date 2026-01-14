@@ -1,5 +1,4 @@
 import type { Server } from "http";
-import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { ValidationPipe, type INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -60,14 +59,6 @@ describe("FactCheck Claim Status (e2e)", () => {
     // Clean up
     await prismaService.factCheck.deleteMany({ where: { userId: TEST_USER_ID } });
     await prismaService.user.deleteMany({ where: { email: TEST_USER_EMAIL } });
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-    const cacheManager: any = app.get(CACHE_MANAGER);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    if (cacheManager.store?.client?.quit) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      await cacheManager.store.client.quit();
-    }
 
     await prismaService.$disconnect();
     await app.close();

@@ -1,5 +1,4 @@
 import type { Server } from "http";
-import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { ValidationPipe, type INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -91,15 +90,6 @@ describe("FactCheck (e2e)", () => {
       where: { email: "fc-user@example.com" },
     });
 
-    // Redis 연결 종료
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-    const cacheManager: any = app.get(CACHE_MANAGER);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    if (cacheManager.store && typeof cacheManager.store.client?.quit === "function") {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      await cacheManager.store.client.quit();
-    }
-
     await prismaService.$disconnect();
     await app.close();
   });
@@ -169,7 +159,7 @@ describe("FactCheck (e2e)", () => {
           .send({ text: "테스트 텍스트" });
 
         expect(response.status).toBe(403);
-        expect((response.body as { message: string }).message).toBe("GUEST_LIMIT_EXCEEDED");
+        expect((response.body as { code: string }).code).toBe("GUEST_LIMIT_EXCEEDED");
       });
     });
 
