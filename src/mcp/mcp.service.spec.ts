@@ -107,9 +107,48 @@ describe("McpService", () => {
         method: "tools/call",
         params: {
           name: "factcheck",
-          arguments: { text: "테스트 텍스트" },
+          arguments: {
+            text: "테스트 텍스트",
+            whitelist: [],
+            blacklist: [],
+          },
         },
       });
+    });
+
+    it("요청 형식이 요구사항과 일치해야 한다 (whitelist, blacklist 포함)", async () => {
+      mockAxiosPost.mockResolvedValue({
+        data: {
+          jsonrpc: "2.0",
+          id: "test-id",
+          result: { content: [{ type: "text", text: "{}" }] },
+        },
+      });
+
+      const text = "검증할 텍스트";
+      const filters = {
+        whitelist: ["naver.com"],
+        blacklist: ["example.com"],
+      };
+
+      await service.analyze(text, filters);
+
+      expect(mockAxiosPost).toHaveBeenCalledWith(
+        expect.stringContaining("/mcp"),
+        expect.objectContaining({
+          jsonrpc: "2.0",
+          id: "test-uuid",
+          method: "tools/call",
+          params: {
+            name: "factcheck",
+            arguments: {
+              text: "검증할 텍스트",
+              whitelist: ["naver.com"],
+              blacklist: ["example.com"],
+            },
+          },
+        }),
+      );
     });
 
     it("서버가 500 에러를 반환하면 BadGatewayException을 던져야 한다", async () => {

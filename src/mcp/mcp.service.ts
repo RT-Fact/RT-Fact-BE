@@ -11,6 +11,7 @@ import { AxiosError } from "axios";
 import axiosRetry from "axios-retry";
 import { v4 as uuidv4 } from "uuid";
 import { ERROR_CODES } from "../common/constants/error-codes";
+import type { DomainFilters } from "../settings/types/settings.types";
 import { JSON_RPC, MCP_CONFIG } from "./constants";
 import type { JsonRpcResponse, McpResponse } from "./types/mcp.types";
 
@@ -34,10 +35,14 @@ export class McpService {
   /**
    * MCP 서버에 텍스트 분석 요청 (JSON-RPC 2.0)
    * @param text 분석할 텍스트
+   * @param filters 도메인 필터 (whitelist, blacklist)
    * @returns MCP 서버의 분석 결과
    * @throws BadGatewayException MCP 서버 호출 실패 시
    */
-  async analyze(text: string): Promise<McpResponse> {
+  async analyze(
+    text: string,
+    filters: DomainFilters = { whitelist: [], blacklist: [] },
+  ): Promise<McpResponse> {
     const startTime = Date.now();
     this.logger.log(`MCP 서버 요청 시작 (JSON-RPC) - 텍스트 길이: ${text.length}`);
 
@@ -50,7 +55,11 @@ export class McpService {
           method: JSON_RPC.METHOD,
           params: {
             name: JSON_RPC.TOOL_NAME,
-            arguments: { text },
+            arguments: {
+              text,
+              whitelist: filters.whitelist,
+              blacklist: filters.blacklist,
+            },
           },
         },
       );
