@@ -1,12 +1,19 @@
 import type { Request, Response } from "express";
 
 /**
+ * X-Forwarded-For 헤더 타입
+ */
+export type XForwardedFor = string | undefined;
+
+/**
  * User JWT 페이로드 구조
+ * - sub: 사용자 고유 식별자 (ID)
+ * - email: 사용자 이메일
  */
 export interface UserJwtPayload {
   id: string;
   email: string;
-  jti?: string;
+  jti: string;
 }
 
 /**
@@ -15,34 +22,10 @@ export interface UserJwtPayload {
 export interface GuestJwtPayload {
   ip: string;
   isGuest: true;
-  jti?: string;
+  jti: string;
 }
 
-/**
- * Redis에 저장될 게스트 정보
- */
-export interface GuestInfo {
-  remainingUses: number;
-  createdAt: number;
-}
-
-/**
- * Google OAuth 사용자 프로필
- */
-export interface GoogleProfile {
-  email: string;
-  name: string;
-  provider: string;
-  providerId: string;
-}
-
-/**
- * JWT 토큰 쌍
- */
-export interface TokenPair {
-  accessToken: string;
-  refreshToken: string;
-}
+export type JwtPayload = UserJwtPayload | GuestJwtPayload;
 
 /**
  * 로그인한 일반 사용자 정보
@@ -67,10 +50,37 @@ export interface GuestUser {
 export type JwtUser = AuthenticatedUser | GuestUser;
 
 /**
- * JWT 인증된 사용자 정보가 포함된 Request 객체
+ * 게스트 정보 조회 결과 (Redis)
  */
+export interface GuestInfo {
+  remainingUses: number;
+  createdAt: number;
+}
+
+/**
+ * Google OAuth 사용자 프로필
+ */
+export interface GoogleProfile {
+  email: string;
+  name: string;
+  provider: string;
+  providerId: string;
+}
+
+/**
+ * JWT 토큰 쌍
+ */
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+}
+
 export interface RequestWithUser extends Request {
   user: JwtUser;
+}
+
+export interface RequestWithGoogleUser extends Request {
+  user: GoogleProfile;
 }
 
 export function isGuestUser(user: JwtUser): user is GuestUser {
@@ -82,13 +92,6 @@ export function isAuthenticatedUser(user: JwtUser): user is AuthenticatedUser {
 }
 
 /**
- * Google OAuth 인증된 사용자 정보가 포함된 Request 객체
- */
-export interface RequestWithGoogleUser extends Request {
-  user: GoogleProfile;
-}
-
-/**
  * 리다이렉션만 필요한 응답 타입 (googleAuthCallback용)
  */
 export type RedirectResponse = Pick<Response, "redirect">;
@@ -97,3 +100,8 @@ export type RedirectResponse = Pick<Response, "redirect">;
  * 쿠키 설정 및 JSON 응답이 필요한 응답 타입 (exchangeToken용)
  */
 export type TokenResponse = Pick<Response, "cookie" | "json">;
+
+/**
+ * 쿠키 삭제 및 JSON 응답이 필요한 응답 타입 (logout용)
+ */
+export type LogoutResponse = Pick<Response, "clearCookie" | "json">;

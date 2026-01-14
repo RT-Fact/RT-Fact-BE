@@ -91,6 +91,21 @@ export class AllExceptionsFilter implements ExceptionFilter {
           message: firstMessage ?? "입력값이 올바르지 않습니다.",
         };
       }
+
+      if (
+        typeof exceptionResponse === "object" &&
+        exceptionResponse !== null &&
+        "message" in exceptionResponse &&
+        typeof (exceptionResponse as { message: unknown }).message === "string"
+      ) {
+        const potentialCode = (exceptionResponse as { message: string }).message as ErrorCode;
+        if (ERROR_MESSAGES[potentialCode]) {
+          return {
+            code: potentialCode,
+            message: ERROR_MESSAGES[potentialCode],
+          };
+        }
+      }
     }
 
     return {
@@ -105,15 +120,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (typeof response !== "object" || response === null) {
       return false;
     }
-  
+
     if (!("message" in response)) {
       return false;
     }
-  
+
     if ("error" in response) {
       return (response as { error?: string }).error === "Bad Request";
     }
-  
+
     return true;
   }
 

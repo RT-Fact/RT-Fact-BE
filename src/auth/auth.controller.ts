@@ -1,10 +1,9 @@
-import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import {
   Body,
   Controller,
   Get,
   Headers,
-  Inject,
+  Ip,
   Post,
   Req,
   Res,
@@ -13,19 +12,23 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AuthGuard } from "@nestjs/passport";
-import { Cache } from "cache-manager";
 import { v4 as uuidv4 } from "uuid";
 import { ERROR_CODES } from "../common/constants/error-codes";
 import { GoogleUser } from "../common/decorators/google-user.decorator";
 import { Public } from "../common/decorators/public.decorator";
+import { RequireLogin } from "../common/decorators/require-login.decorator";
+import { RedisService } from "../redis/redis.service";
 import { AuthService } from "./auth.service";
-import { RefreshTokenDto } from "./dto/refresh-token.dto";
+import { REFRESH_TOKEN_TTL_MS } from "./constants";
 import {
+  AuthenticatedUser,
   GoogleProfile,
   isGuestUser,
+  LogoutResponse,
   RedirectResponse,
   RequestWithUser,
   TokenResponse,
+  XForwardedFor,
 } from "./types/auth.types";
 
 @Controller("auth")
@@ -33,7 +36,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
-    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -69,9 +72,9 @@ export class AuthController {
 
       // 보안을 위해 토큰을 URL에 노출하지 않고, 일회용 코드로 교환
       const authCode = uuidv4();
-      await this.cacheManager.set(authCode, authenticatedUser.id, 60000); // 1분 유효
+      await this.redisService.set(authCode, authenticatedUser.id, 60000); // 1분 유효
 
-      return res.redirect(`${frontendUrl}?code=${authCode}`);
+      return res.redirect(`${frontendUrl}/auth/callback?code=${authCode}`);
     } catch {
       return res.redirect(`${frontendUrl}/login?error=oauth_failed`);
     }
@@ -84,13 +87,13 @@ export class AuthController {
   @Post("token")
   @Public()
   async exchangeToken(@Body("code") code: string, @Res() res: TokenResponse) {
-    const userId = await this.cacheManager.get<string>(code);
+    const userId = await this.redisService.get(code);
 
     if (!userId) {
       throw new UnauthorizedException(ERROR_CODES.INVALID_AUTH_CODE);
     }
 
-    await this.cacheManager.del(code); // 일회용 코드 삭제
+    await this.redisService.del(code);
 
     const user = await this.authService.findUserById(userId);
     if (!user) {
@@ -99,13 +102,16 @@ export class AuthController {
 
     const tokens = this.authService.generateUserTokens(user.id, user.email);
 
+    // Refresh Token을 Redis에 저장 (화이트리스트 관리)
+    await this.redisService.set(`rt:${user.id}`, tokens.refreshToken, REFRESH_TOKEN_TTL_MS);
+
     // Refresh Token을 HttpOnly Cookie로 설정
     res.cookie("refreshToken", tokens.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // HTTPS에서만 전송
-      sameSite: "lax", // CSRF 보호
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       path: "/",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7일
+      maxAge: REFRESH_TOKEN_TTL_MS,
     });
 
     // Access Token은 Body로 반환
@@ -118,8 +124,25 @@ export class AuthController {
    */
   @Post("refresh")
   @Public()
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refreshTokens(refreshTokenDto.refreshToken);
+  async refresh(@Req() req: RequestWithUser, @Res() res: TokenResponse) {
+    const refreshToken = req.cookies["refreshToken"] as string | undefined;
+
+    if (!refreshToken) {
+      throw new UnauthorizedException(ERROR_CODES.INVALID_REFRESH_TOKEN);
+    }
+
+    const tokens = await this.authService.refreshTokens(refreshToken);
+
+    // 새로운 Refresh Token을 쿠키로 설정 (Rotation)
+    res.cookie("refreshToken", tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: REFRESH_TOKEN_TTL_MS,
+    });
+
+    return res.json({ accessToken: tokens.accessToken });
   }
 
   /**
@@ -128,9 +151,9 @@ export class AuthController {
    */
   @Post("guest")
   @Public()
-  async guest(@Headers("x-forwarded-for") forwardedFor?: string, @Req() req?: { ip?: string }) {
-    // IP 추출: X-Forwarded-For 헤더 또는 Express req.ip
-    const ip = forwardedFor?.split(",")[0].trim() || req?.ip || "unknown";
+  async guest(@Headers("x-forwarded-for") forwardedFor: XForwardedFor, @Ip() requestIp: string) {
+    // IP 추출: X-Forwarded-For 헤더 또는 @Ip()
+    const ip = forwardedFor ? forwardedFor.split(",")[0].trim() : requestIp;
 
     // 게스트 정보 조회 또는 생성
     const guestInfo = await this.authService.getOrCreateGuest(ip);
@@ -143,6 +166,26 @@ export class AuthController {
       remainingUses: guestInfo.remainingUses,
       isGuest: true,
     };
+  }
+
+  /**
+   * POST /auth/logout
+   * 로그아웃
+   */
+  @Post("logout")
+  @RequireLogin()
+  async logout(@Req() req: RequestWithUser, @Res() res: LogoutResponse) {
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+
+    const user = req.user as AuthenticatedUser;
+    await this.redisService.del(`rt:${user.userId}`);
+
+    return res.json({ message: "로그아웃 되었습니다." });
   }
 
   /**

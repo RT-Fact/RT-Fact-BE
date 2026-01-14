@@ -12,6 +12,8 @@ import type { AuthenticatedUser, JwtUser } from "../auth/types/auth.types";
 import { ERROR_CODES } from "../common/constants/error-codes";
 import { McpService } from "../mcp/mcp.service";
 import type { McpSentence } from "../mcp/types/mcp.types";
+import { SettingsService } from "../settings/settings.service";
+import type { DomainFilters } from "../settings/types/settings.types";
 import { CLAIM_STATUS_MAP } from "./constants";
 import type { FactCheckListResponse } from "./dto/factcheck-list-response.dto";
 import type {
@@ -34,6 +36,7 @@ export class FactCheckService {
     private readonly mcpService: McpService,
     private readonly factCheckRepository: FactCheckRepository,
     private readonly guestRepository: GuestRepository,
+    private readonly settingsService: SettingsService,
   ) {}
 
   /**
@@ -56,8 +59,14 @@ export class FactCheckService {
       }
     }
 
-    // 3. MCP 서버 호출
-    const mcpResponse = await this.mcpService.analyze(text);
+    // 3. 도메인 필터 설정 조회 (로그인 유저만)
+    let filters: DomainFilters = { whitelist: [], blacklist: [] };
+    if (!user.isGuest) {
+      filters = await this.settingsService.getSettings(user.userId);
+    }
+
+    // 4. MCP 서버 호출
+    const mcpResponse = await this.mcpService.analyze(text, filters);
 
     // 4. 응답 변환
     const factCheckId = uuidv4();
@@ -216,7 +225,7 @@ export class FactCheckService {
         checkedCount: item.checkedCount,
         createdAt: item.createdAt.toISOString(),
       })),
-      meta: {
+      pagination: {
         page: query.page,
         limit: query.limit,
         total,

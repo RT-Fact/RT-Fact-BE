@@ -60,7 +60,7 @@ describe("SettingsController (e2e)", () => {
   });
 
   describe("GET /settings", () => {
-    it("should return empty lists initially", () => {
+    it("초기에는 빈 목록을 반환해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .get("/settings")
         .set("Authorization", `Bearer ${accessToken}`)
@@ -78,7 +78,7 @@ describe("SettingsController (e2e)", () => {
   describe("POST /settings/whitelist", () => {
     const domain = "good-site.com";
 
-    it("should add a domain to whitelist", () => {
+    it("화이트리스트에 도메인을 추가해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .post("/settings/whitelist")
         .set("Authorization", `Bearer ${accessToken}`)
@@ -90,19 +90,19 @@ describe("SettingsController (e2e)", () => {
         });
     });
 
-    it("should fail with DUPLICATE_DOMAIN if domain already exists", () => {
+    it("이미 존재하는 도메인이면 DUPLICATE_DOMAIN 오류가 발생해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .post("/settings/whitelist")
         .set("Authorization", `Bearer ${accessToken}`)
         .send({ domain })
-        .expect(400)
+        .expect(409)
         .expect((res) => {
           const body = res.body as ErrorResponse;
           expect(body.code).toBe("DUPLICATE_DOMAIN");
         });
     });
 
-    it("should fail with INVALID_DOMAIN if domain format is wrong", () => {
+    it("도메인 형식이 잘못되면 INVALID_DOMAIN 오류가 발생해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .post("/settings/whitelist")
         .set("Authorization", `Bearer ${accessToken}`)
@@ -110,7 +110,8 @@ describe("SettingsController (e2e)", () => {
         .expect(400)
         .expect((res) => {
           const body = res.body as ErrorResponse;
-          expect(body.message).toEqual(expect.arrayContaining(["INVALID_DOMAIN"]));
+          expect(typeof body.message).toBe("string");
+          expect(body.message).toBe("INVALID_DOMAIN");
         });
     });
   });
@@ -118,7 +119,7 @@ describe("SettingsController (e2e)", () => {
   describe("DELETE /settings/whitelist/:domain", () => {
     const domain = "good-site.com";
 
-    it("should remove a domain from whitelist", () => {
+    it("화이트리스트에서 도메인을 제거해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .delete(`/settings/whitelist/${domain}`)
         .set("Authorization", `Bearer ${accessToken}`)
@@ -129,7 +130,7 @@ describe("SettingsController (e2e)", () => {
         });
     });
 
-    it("should fail if unauthenticated", () => {
+    it("인증되지 않은 경우 실패해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .delete(`/settings/whitelist/${domain}`)
         .expect(401);
@@ -139,7 +140,7 @@ describe("SettingsController (e2e)", () => {
   describe("POST /settings/blacklist", () => {
     const domain = "bad-site.com";
 
-    it("should add a domain to blacklist", () => {
+    it("블랙리스트에 도메인을 추가해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .post("/settings/blacklist")
         .set("Authorization", `Bearer ${accessToken}`)
@@ -151,12 +152,12 @@ describe("SettingsController (e2e)", () => {
         });
     });
 
-    it("should fail with DUPLICATE_DOMAIN if domain already exists", () => {
+    it("이미 존재하는 도메인이면 DUPLICATE_DOMAIN 오류가 발생해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .post("/settings/blacklist")
         .set("Authorization", `Bearer ${accessToken}`)
         .send({ domain })
-        .expect(400)
+        .expect(409)
         .expect((res) => {
           const body = res.body as ErrorResponse;
           expect(body.code).toBe("DUPLICATE_DOMAIN");
@@ -180,24 +181,24 @@ describe("SettingsController (e2e)", () => {
         .send({ domain: blackDomain });
     });
 
-    it("should fail to add whitelisted domain to blacklist", () => {
+    it("화이트리스트에 있는 도메인을 블랙리스트에 추가하면 실패해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .post("/settings/blacklist")
         .set("Authorization", `Bearer ${accessToken}`)
         .send({ domain: whiteDomain })
-        .expect(400)
+        .expect(409)
         .expect((res) => {
           const body = res.body as ErrorResponse;
           expect(body.code).toBe("DOMAIN_CONFLICT");
         });
     });
 
-    it("should fail to add blacklisted domain to whitelist", () => {
+    it("블랙리스트에 있는 도메인을 화이트리스트에 추가하면 실패해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .post("/settings/whitelist")
         .set("Authorization", `Bearer ${accessToken}`)
         .send({ domain: blackDomain })
-        .expect(400)
+        .expect(409)
         .expect((res) => {
           const body = res.body as ErrorResponse;
           expect(body.code).toBe("DOMAIN_CONFLICT");
@@ -208,7 +209,7 @@ describe("SettingsController (e2e)", () => {
   describe("DELETE /settings/blacklist/:domain", () => {
     const domain = "bad-site.com";
 
-    it("should remove a domain from blacklist", () => {
+    it("블랙리스트에서 도메인을 제거해야 한다", () => {
       return request(app.getHttpServer() as http.Server)
         .delete(`/settings/blacklist/${domain}`)
         .set("Authorization", `Bearer ${accessToken}`)

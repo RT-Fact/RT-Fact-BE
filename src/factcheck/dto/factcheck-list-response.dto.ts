@@ -15,5 +15,5 @@ export interface FactCheckListItem {
 
 export interface FactCheckListResponse {
   items: FactCheckListItem[];
-  meta: PaginationMeta;
+  pagination: PaginationMeta;
 }

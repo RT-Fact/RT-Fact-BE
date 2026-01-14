@@ -3,6 +3,7 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { GuestRepository } from "../auth/repositories/guest.repository";
 import { McpService } from "../mcp/mcp.service";
 import type { McpResponse } from "../mcp/types/mcp.types";
+import { SettingsService } from "../settings/settings.service";
 import { FactCheckService } from "./factcheck.service";
 import { FactCheckRepository } from "./repositories/factcheck.repository";
 
@@ -13,6 +14,7 @@ describe("FactCheckService", () => {
   let mockGetGuestInfo: jest.Mock;
   let mockSetGuestInfo: jest.Mock;
   let mockDecrementRemainingUses: jest.Mock;
+  let mockGetSettings: jest.Mock;
 
   const mockMcpResponse: McpResponse = {
     title: "테스트 제목",
@@ -63,6 +65,8 @@ describe("FactCheckService", () => {
     mockSetGuestInfo = jest.fn();
     mockDecrementRemainingUses = jest.fn();
 
+    mockGetSettings = jest.fn().mockResolvedValue({ whitelist: [], blacklist: [] });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         FactCheckService,
@@ -84,6 +88,12 @@ describe("FactCheckService", () => {
             getGuestInfo: mockGetGuestInfo,
             setGuestInfo: mockSetGuestInfo,
             decrementRemainingUses: mockDecrementRemainingUses,
+          },
+        },
+        {
+          provide: SettingsService,
+          useValue: {
+            getSettings: mockGetSettings,
           },
         },
       ],
@@ -144,9 +154,14 @@ describe("FactCheckService", () => {
 
     describe("Authenticated User", () => {
       it("로그인 사용자 요청 시 DB에 저장해야 한다", async () => {
+        const mockFilters = { whitelist: ["good.com"], blacklist: ["bad.com"] };
+        mockGetSettings.mockResolvedValue(mockFilters);
         mockAnalyze.mockResolvedValue(mockMcpResponse);
 
         await service.processFactCheck(mockAuthenticatedUser, "테스트 텍스트");
+
+        expect(mockGetSettings).toHaveBeenCalledWith(mockAuthenticatedUser.userId);
+        expect(mockAnalyze).toHaveBeenCalledWith("테스트 텍스트", mockFilters);
 
         expect(mockSaveFactCheck).toHaveBeenCalledWith(
           mockAuthenticatedUser.userId,
