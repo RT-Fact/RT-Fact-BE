@@ -3,7 +3,12 @@ import { ForbiddenException, Injectable, Logger, NotFoundException } from "@nest
 import { ConfigService } from "@nestjs/config";
 import { ERROR_CODES } from "../common/constants/error-codes";
 import { RedisService } from "../redis/redis.service";
-import { API_KEY_CACHE_TTL, API_KEY_PREFIX, DEFAULT_MAX_API_KEYS } from "./constants";
+import {
+  API_KEY_CACHE_TTL,
+  API_KEY_PREFIX,
+  API_KEY_PREFIX_LENGTH,
+  DEFAULT_MAX_API_KEYS,
+} from "./constants";
 import { CreateApiKeyDto } from "./dto/create-api-key.dto";
 import { ApiKeysRepository } from "./repositories/api-keys.repository";
 import type {
@@ -32,7 +37,7 @@ export class ApiKeysService {
 
     const randomPart = crypto.randomBytes(16).toString("hex");
     const apiKey = `${API_KEY_PREFIX}${randomPart}`;
-    const keyPrefix = apiKey.substring(0, 8);
+    const keyPrefix = apiKey.substring(0, API_KEY_PREFIX_LENGTH);
     const keyHash = this.hashKey(apiKey);
 
     const savedKey = await this.apiKeysRepository.create({
@@ -85,7 +90,7 @@ export class ApiKeysService {
       return { valid: false };
     }
 
-    const prefix = apiKey.substring(0, 8);
+    const prefix = apiKey.substring(0, API_KEY_PREFIX_LENGTH);
     const cacheKey = `auth:apikey:${prefix}`;
     const cached = await this.redisService.get(cacheKey);
 
