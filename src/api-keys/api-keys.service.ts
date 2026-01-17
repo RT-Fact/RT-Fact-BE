@@ -1,6 +1,5 @@
 import * as crypto from "crypto";
 import { ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { ERROR_CODES } from "../common/constants/error-codes";
 import { RedisService } from "../redis/redis.service";
 import {
@@ -24,14 +23,12 @@ export class ApiKeysService {
   constructor(
     private readonly apiKeysRepository: ApiKeysRepository,
     private readonly redisService: RedisService,
-    private readonly configService: ConfigService,
   ) {}
 
   async createApiKey(userId: string, createApiKeyDto: CreateApiKeyDto): Promise<CreatedApiKeyInfo> {
     const currentCount = await this.apiKeysRepository.countByUserId(userId);
-    const maxKeys = this.configService.get<number>("API_KEY_MAX_PER_USER") || DEFAULT_MAX_API_KEYS;
 
-    if (currentCount >= maxKeys) {
+    if (currentCount >= DEFAULT_MAX_API_KEYS) {
       throw new ForbiddenException(ERROR_CODES.API_KEY_LIMIT_EXCEEDED);
     }
 

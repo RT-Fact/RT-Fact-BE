@@ -101,7 +101,7 @@ describe("McpService", () => {
       expect(result.sentences[0].type).toBe("claim");
       expect(result.sentences[1].type).toBe("opinion");
 
-      expect(mockAxiosPost).toHaveBeenCalledWith("http://localhost:8000/mcp", {
+      expect(mockAxiosPost).toHaveBeenCalledWith("http://localhost:8000/api/factcheck", {
         jsonrpc: "2.0",
         id: "test-uuid",
         method: "tools/call",
@@ -134,7 +134,7 @@ describe("McpService", () => {
       await service.analyze(text, filters);
 
       expect(mockAxiosPost).toHaveBeenCalledWith(
-        expect.stringContaining("/mcp"),
+        expect.stringContaining("/api/factcheck"),
         expect.objectContaining({
           jsonrpc: "2.0",
           id: "test-uuid",
