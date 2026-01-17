@@ -40,6 +40,8 @@ import { SettingsModule } from "./settings/settings.module";
         MCP_SERVER_URL: Joi.string().uri().required(),
         // API Keys
         API_KEY_MAX_PER_USER: Joi.number().default(5),
+        // Internal Auth
+        INTERNAL_API_SECRET: Joi.string().required(),
       }),
     }),
     PrismaModule,

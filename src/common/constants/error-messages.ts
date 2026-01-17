@@ -25,6 +25,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   USER_NOT_FOUND: "사용자를 찾을 수 없습니다.",
   INVALID_AUTH_CODE: "유효하지 않거나 만료된 인증 코드입니다.",
   GUEST_NOT_ALLOWED: "게스트는 이 기능을 이용할 수 없습니다.",
+  INVALID_SHARED_SECRET: "내부 통신 인증에 실패했습니다.",
 
   // Settings
   DUPLICATE_DOMAIN: "이미 등록된 도메인입니다.",
