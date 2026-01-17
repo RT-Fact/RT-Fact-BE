@@ -31,6 +31,11 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   DOMAIN_CONFLICT: "해당 도메인이 다른 목록에 이미 존재합니다.",
   INVALID_DOMAIN: "올바른 도메인 형식이 아닙니다.",
 
+  // API Keys
+  API_KEY_NOT_FOUND: "API 키를 찾을 수 없거나 접근 권한이 없습니다.",
+  INVALID_API_KEY_FORMAT: "유효하지 않은 API 키 형식입니다.",
+  API_KEY_LIMIT_EXCEEDED: "생성 가능한 API 키 개수를 초과했습니다.",
+
   // Validation
   VALIDATION_ERROR: "입력값이 올바르지 않습니다.",
 
