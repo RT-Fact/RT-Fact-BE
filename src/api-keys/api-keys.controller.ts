@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/common";
-import { User } from "@prisma/client";
-import { LoginGuard } from "../auth/guards/login.guard";
+import { SharedSecretGuard } from "../auth/guards/shared-secret.guard";
+import { AuthenticatedUser } from "../auth/types/auth.types";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
+import { RequireLogin } from "../common/decorators/require-login.decorator";
 import { ApiKeysService } from "./api-keys.service";
 import { CreateApiKeyDto } from "./dto/create-api-key.dto";
 import { VerifyApiKeyDto } from "./dto/verify-api-key.dto";
@@ -16,27 +17,31 @@ export class ApiKeysController {
   constructor(private readonly apiKeysService: ApiKeysService) {}
 
   @Post()
-  @UseGuards(LoginGuard)
+  @RequireLogin()
   async create(
-    @CurrentUser() user: User,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateApiKeyDto,
   ): Promise<CreatedApiKeyInfo> {
-    return this.apiKeysService.createApiKey(user.id, dto);
+    return this.apiKeysService.createApiKey(user.userId, dto);
   }
 
   @Get()
-  @UseGuards(LoginGuard)
-  async findAll(@CurrentUser() user: User): Promise<ApiKeyInfo[]> {
-    return this.apiKeysService.listApiKeys(user.id);
+  @RequireLogin()
+  async findAll(@CurrentUser() user: AuthenticatedUser): Promise<ApiKeyInfo[]> {
+    return this.apiKeysService.listApiKeys(user.userId);
   }
 
   @Delete(":id")
-  @UseGuards(LoginGuard)
-  async remove(@CurrentUser() user: User, @Param("id") id: string): Promise<{ success: boolean }> {
-    return this.apiKeysService.deleteApiKey(user.id, id);
+  @RequireLogin()
+  async remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+  ): Promise<{ success: boolean }> {
+    return this.apiKeysService.deleteApiKey(user.userId, id);
   }
 
   @Post("verify")
+  @UseGuards(SharedSecretGuard)
   async verify(@Body() dto: VerifyApiKeyDto): Promise<ApiKeyVerificationResult> {
     return this.apiKeysService.verifyApiKey(dto.key);
   }
