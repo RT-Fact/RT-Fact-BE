@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 import * as Joi from "joi";
+import { ApiKeysModule } from "./api-keys/api-keys.module";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { AuthModule } from "./auth/auth.module";
@@ -37,11 +38,14 @@ import { SettingsModule } from "./settings/settings.module";
         FRONTEND_URL: Joi.string().uri(),
         // MCP Server
         MCP_SERVER_URL: Joi.string().uri().required(),
+        // API Keys
+        API_KEY_MAX_PER_USER: Joi.number().default(5),
       }),
     }),
     PrismaModule,
     RedisModule,
     AuthModule,
+    ApiKeysModule,
     McpModule,
     FactCheckModule,
     SettingsModule,
