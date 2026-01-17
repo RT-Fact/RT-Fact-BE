@@ -14,14 +14,14 @@ model User {
   id         String   @id @default(uuid())
   email      String   @unique
   name       String?
-  provider   String   // google, github
+  provider   String
   providerId String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  // Relations
   factChecks    FactCheck[]
   domainFilters DomainFilter[]
+  apiKeys       ApiKey[]
 }
 
 // ====================================
@@ -30,19 +30,34 @@ model User {
 model DomainFilter {
   id        Int      @id @default(autoincrement())
   domain    String
-  listType  ListType // WHITE, BLACK
+  listType  ListType
   createdAt DateTime @default(now())
 
-  // Relations
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // 유저당 도메인 중복 방지
   @@unique([userId, domain])
 }
 
 // ====================================
-// 3. 팩트체크 (FactCheck)
+// 3. API 키 (ApiKey)
+// ====================================
+model ApiKey {
+  id        String   @id @default(uuid())
+  name      String
+  keyHash   String   @unique
+  keyPrefix String
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([keyPrefix])
+  @@index([userId])
+}
+
+// ====================================
+// 4. 팩트체크 (FactCheck)
 // ====================================
 model FactCheck {
   id           String   @id @default(uuid())
@@ -52,7 +67,6 @@ model FactCheck {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // Relations
   userId    String
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   sentences Sentence[]
@@ -61,24 +75,21 @@ model FactCheck {
 }
 
 // ====================================
-// 4. 문장 (Sentence) - position 방식
+// 5. 문장 (Sentence) - position 방식
 // ====================================
 model Sentence {
   id       String       @id @default(uuid())
-  type     SentenceType // CLAIM, OPINION (EXCLUDED는 저장 안 함)
+  type     SentenceType
   text     String       @db.Text
-  position Int          // 문장 순서 (0부터 시작)
+  position Int
 
-  // 판정 결과 (CLAIM만 해당)
   verdict    Verdict?
   suggestion String?      @db.Text
   status     ClaimStatus? @default(PENDING)
 
-  // 출처 및 의견 이유
-  sources Json?   // [{ title, url, snippet }, ...]
-  reason  String? // OPINION인 경우 분류 이유
+  sources Json?
+  reason  String?
 
-  // Relations
   factCheckId String
   factCheck   FactCheck @relation(fields: [factCheckId], references: [id], onDelete: Cascade)
 
@@ -86,7 +97,7 @@ model Sentence {
 }
 
 // ====================================
-// 5. Enums
+// 6. Enums
 // ====================================
 enum ListType {
   WHITE
@@ -96,7 +107,6 @@ enum ListType {
 enum SentenceType {
   CLAIM
   OPINION
-  // EXCLUDED는 BE에서 필터링, DB 저장 안 함
 }
 
 enum Verdict {
