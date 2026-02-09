@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { GuestRepository } from "../auth/repositories/guest.repository";
 import { McpService } from "../mcp/mcp.service";
@@ -9,12 +9,27 @@ import { FactCheckRepository } from "./repositories/factcheck.repository";
 
 describe("FactCheckService", () => {
   let service: FactCheckService;
-  let mockAnalyze: jest.Mock;
-  let mockSaveFactCheck: jest.Mock;
-  let mockGetGuestInfo: jest.Mock;
-  let mockSetGuestInfo: jest.Mock;
-  let mockDecrementRemainingUses: jest.Mock;
-  let mockGetSettings: jest.Mock;
+
+  const mockMcpService = {
+    analyze: jest.fn(),
+  };
+
+  const mockFactCheckRepository = {
+    saveFactCheck: jest.fn(),
+    findByUserId: jest.fn(),
+    findById: jest.fn(),
+    deleteById: jest.fn(),
+  };
+
+  const mockGuestRepository = {
+    getGuestInfo: jest.fn(),
+    setGuestInfo: jest.fn(),
+    decrementRemainingUses: jest.fn(),
+  };
+
+  const mockSettingsService = {
+    getSettings: jest.fn().mockResolvedValue({ whitelist: [], blacklist: [] }),
+  };
 
   const mockMcpResponse: McpResponse = {
     title: "테스트 제목",
@@ -59,42 +74,24 @@ describe("FactCheckService", () => {
   };
 
   beforeEach(async () => {
-    mockAnalyze = jest.fn();
-    mockSaveFactCheck = jest.fn();
-    mockGetGuestInfo = jest.fn();
-    mockSetGuestInfo = jest.fn();
-    mockDecrementRemainingUses = jest.fn();
-
-    mockGetSettings = jest.fn().mockResolvedValue({ whitelist: [], blacklist: [] });
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         FactCheckService,
         {
           provide: McpService,
-          useValue: {
-            analyze: mockAnalyze,
-          },
+          useValue: mockMcpService,
         },
         {
           provide: FactCheckRepository,
-          useValue: {
-            saveFactCheck: mockSaveFactCheck,
-          },
+          useValue: mockFactCheckRepository,
         },
         {
           provide: GuestRepository,
-          useValue: {
-            getGuestInfo: mockGetGuestInfo,
-            setGuestInfo: mockSetGuestInfo,
-            decrementRemainingUses: mockDecrementRemainingUses,
-          },
+          useValue: mockGuestRepository,
         },
         {
           provide: SettingsService,
-          useValue: {
-            getSettings: mockGetSettings,
-          },
+          useValue: mockSettingsService,
         },
       ],
     }).compile();
@@ -117,7 +114,7 @@ describe("FactCheckService", () => {
 
     describe("Guest User", () => {
       it("게스트 한도 초과 시 ForbiddenException을 던져야 한다", async () => {
-        mockGetGuestInfo.mockResolvedValue({
+        mockGuestRepository.getGuestInfo.mockResolvedValue({
           remainingUses: 0,
           createdAt: Date.now(),
         });
@@ -132,7 +129,7 @@ describe("FactCheckService", () => {
       });
 
       it("게스트 정보가 없으면 ForbiddenException을 던져야 한다", async () => {
-        mockGetGuestInfo.mockResolvedValue(null);
+        mockGuestRepository.getGuestInfo.mockResolvedValue(null);
 
         await expect(service.processFactCheck(mockGuestUser, "테스트 텍스트")).rejects.toThrow(
           ForbiddenException,
@@ -140,30 +137,30 @@ describe("FactCheckService", () => {
       });
 
       it("게스트 정상 요청 시 사용량을 차감해야 한다", async () => {
-        mockGetGuestInfo.mockResolvedValue({
+        mockGuestRepository.getGuestInfo.mockResolvedValue({
           remainingUses: 3,
           createdAt: Date.now(),
         });
-        mockAnalyze.mockResolvedValue(mockMcpResponse);
+        mockMcpService.analyze.mockResolvedValue(mockMcpResponse);
 
         await service.processFactCheck(mockGuestUser, "테스트 텍스트");
 
-        expect(mockDecrementRemainingUses).toHaveBeenCalledWith(mockGuestUser.ip);
+        expect(mockGuestRepository.decrementRemainingUses).toHaveBeenCalledWith(mockGuestUser.ip);
       });
     });
 
     describe("Authenticated User", () => {
       it("로그인 사용자 요청 시 DB에 저장해야 한다", async () => {
         const mockFilters = { whitelist: ["good.com"], blacklist: ["bad.com"] };
-        mockGetSettings.mockResolvedValue(mockFilters);
-        mockAnalyze.mockResolvedValue(mockMcpResponse);
+        mockSettingsService.getSettings.mockResolvedValue(mockFilters);
+        mockMcpService.analyze.mockResolvedValue(mockMcpResponse);
 
         await service.processFactCheck(mockAuthenticatedUser, "테스트 텍스트");
 
-        expect(mockGetSettings).toHaveBeenCalledWith(mockAuthenticatedUser.userId);
-        expect(mockAnalyze).toHaveBeenCalledWith("테스트 텍스트", mockFilters);
+        expect(mockSettingsService.getSettings).toHaveBeenCalledWith(mockAuthenticatedUser.userId);
+        expect(mockMcpService.analyze).toHaveBeenCalledWith("테스트 텍스트", mockFilters);
 
-        expect(mockSaveFactCheck).toHaveBeenCalledWith(
+        expect(mockFactCheckRepository.saveFactCheck).toHaveBeenCalledWith(
           mockAuthenticatedUser.userId,
           expect.any(String),
           mockMcpResponse.title,
@@ -173,17 +170,17 @@ describe("FactCheckService", () => {
       });
 
       it("로그인 사용자는 게스트 사용량을 차감하지 않아야 한다", async () => {
-        mockAnalyze.mockResolvedValue(mockMcpResponse);
+        mockMcpService.analyze.mockResolvedValue(mockMcpResponse);
 
         await service.processFactCheck(mockAuthenticatedUser, "테스트 텍스트");
 
-        expect(mockSetGuestInfo).not.toHaveBeenCalled();
+        expect(mockGuestRepository.setGuestInfo).not.toHaveBeenCalled();
       });
     });
 
     describe("Response Structure", () => {
       it("응답에 필요한 필드들이 포함되어야 한다", async () => {
-        mockAnalyze.mockResolvedValue(mockMcpResponse);
+        mockMcpService.analyze.mockResolvedValue(mockMcpResponse);
 
         const result = await service.processFactCheck(mockAuthenticatedUser, "테스트 텍스트");
 
@@ -196,7 +193,7 @@ describe("FactCheckService", () => {
       });
 
       it("excluded 타입 문장이 필터링되어야 한다", async () => {
-        mockAnalyze.mockResolvedValue(mockMcpResponse);
+        mockMcpService.analyze.mockResolvedValue(mockMcpResponse);
 
         const result = await service.processFactCheck(mockAuthenticatedUser, "테스트 텍스트");
 
@@ -212,7 +209,7 @@ describe("FactCheckService", () => {
       });
 
       it("startIndex 기준으로 정렬 후 position이 할당되어야 한다", async () => {
-        mockAnalyze.mockResolvedValue(mockMcpResponse);
+        mockMcpService.analyze.mockResolvedValue(mockMcpResponse);
 
         const result = await service.processFactCheck(mockAuthenticatedUser, "테스트 텍스트");
 
@@ -224,7 +221,7 @@ describe("FactCheckService", () => {
       });
 
       it("claim 타입에 status: pending이 추가되어야 한다", async () => {
-        mockAnalyze.mockResolvedValue(mockMcpResponse);
+        mockMcpService.analyze.mockResolvedValue(mockMcpResponse);
 
         const result = await service.processFactCheck(mockAuthenticatedUser, "테스트 텍스트");
 
@@ -233,7 +230,7 @@ describe("FactCheckService", () => {
       });
 
       it("startIndex, endIndex가 응답에 포함되지 않아야 한다", async () => {
-        mockAnalyze.mockResolvedValue(mockMcpResponse);
+        mockMcpService.analyze.mockResolvedValue(mockMcpResponse);
 
         const result = await service.processFactCheck(mockAuthenticatedUser, "테스트 텍스트");
 
@@ -246,7 +243,7 @@ describe("FactCheckService", () => {
 
     describe("Summary Calculation", () => {
       it("summary가 정확하게 계산되어야 한다", async () => {
-        mockAnalyze.mockResolvedValue(mockMcpResponse);
+        mockMcpService.analyze.mockResolvedValue(mockMcpResponse);
 
         const result = await service.processFactCheck(mockAuthenticatedUser, "테스트 텍스트");
 
@@ -255,6 +252,275 @@ describe("FactCheckService", () => {
         expect(result.summary.false).toBe(0);
         expect(result.summary.opinion).toBe(1);
       });
+    });
+  });
+
+  describe("getFactCheckHistory", () => {
+    const query = { page: 1, limit: 10 };
+
+    it("페이지네이션된 히스토리를 반환해야 한다", async () => {
+      mockFactCheckRepository.findByUserId.mockResolvedValue({
+        items: [
+          {
+            id: "fc-1",
+            title: "제목 1",
+            originalText: "짧은 텍스트",
+            checkedCount: 3,
+            createdAt: new Date("2026-01-01"),
+          },
+        ],
+        total: 1,
+      });
+
+      const result = await service.getFactCheckHistory(mockAuthenticatedUser, query);
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]).toEqual({
+        id: "fc-1",
+        title: "제목 1",
+        preview: "짧은 텍스트",
+        checkedCount: 3,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
+      expect(result.pagination).toEqual({
+        page: 1,
+        limit: 10,
+        total: 1,
+        totalPages: 1,
+      });
+    });
+
+    it("preview를 100자로 절단해야 한다", async () => {
+      const longText = "가".repeat(200);
+      mockFactCheckRepository.findByUserId.mockResolvedValue({
+        items: [
+          {
+            id: "fc-1",
+            title: "제목",
+            originalText: longText,
+            checkedCount: 1,
+            createdAt: new Date("2026-01-01"),
+          },
+        ],
+        total: 1,
+      });
+
+      const result = await service.getFactCheckHistory(mockAuthenticatedUser, query);
+
+      expect(result.items[0].preview).toHaveLength(100);
+    });
+
+    it("totalPages를 올바르게 계산해야 한다", async () => {
+      mockFactCheckRepository.findByUserId.mockResolvedValue({
+        items: [],
+        total: 25,
+      });
+
+      const result = await service.getFactCheckHistory(mockAuthenticatedUser, {
+        page: 1,
+        limit: 10,
+      });
+
+      expect(result.pagination.totalPages).toBe(3);
+    });
+
+    it("히스토리가 없으면 빈 배열을 반환해야 한다", async () => {
+      mockFactCheckRepository.findByUserId.mockResolvedValue({
+        items: [],
+        total: 0,
+      });
+
+      const result = await service.getFactCheckHistory(mockAuthenticatedUser, query);
+
+      expect(result.items).toEqual([]);
+      expect(result.pagination.totalPages).toBe(0);
+    });
+  });
+
+  describe("getFactCheckById", () => {
+    const factCheckId = "fc-123";
+
+    it("팩트체크 결과를 반환해야 한다", async () => {
+      mockFactCheckRepository.findById.mockResolvedValue({
+        id: factCheckId,
+        title: "테스트 제목",
+        originalText: "원본 텍스트",
+        createdAt: new Date("2026-01-01"),
+        sentences: [
+          {
+            id: 1,
+            type: "CLAIM",
+            text: "검증 문장",
+            position: 0,
+            verdict: "TRUE",
+            suggestion: null,
+            sources: [{ title: "출처", url: "https://example.com" }],
+            status: "PENDING",
+            reason: null,
+          },
+        ],
+      });
+
+      const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
+
+      expect(result).toHaveProperty("id", factCheckId);
+      expect(result).toHaveProperty("sentences");
+      expect(result).toHaveProperty("summary");
+      expect(result).toHaveProperty("createdAt", "2026-01-01T00:00:00.000Z");
+    });
+
+    it("claim 문장을 올바르게 변환해야 한다", async () => {
+      mockFactCheckRepository.findById.mockResolvedValue({
+        id: factCheckId,
+        title: "제목",
+        originalText: "텍스트",
+        createdAt: new Date("2026-01-01"),
+        sentences: [
+          {
+            id: 1,
+            type: "CLAIM",
+            text: "검증 문장",
+            position: 0,
+            verdict: "TRUE",
+            suggestion: "수정 제안",
+            sources: [{ title: "출처", url: "https://example.com" }],
+            status: "APPLIED",
+            reason: null,
+          },
+        ],
+      });
+
+      const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
+      const claim = result.sentences[0];
+
+      expect(claim.type).toBe("claim");
+      expect(claim).toHaveProperty("verdict", "TRUE");
+      expect(claim).toHaveProperty("sources");
+      expect(claim).toHaveProperty("suggestion", "수정 제안");
+      expect(claim).toHaveProperty("status", "applied");
+    });
+
+    it("opinion 문장을 올바르게 변환해야 한다", async () => {
+      mockFactCheckRepository.findById.mockResolvedValue({
+        id: factCheckId,
+        title: "제목",
+        originalText: "텍스트",
+        createdAt: new Date("2026-01-01"),
+        sentences: [
+          {
+            id: 2,
+            type: "OPINION",
+            text: "의견 문장",
+            position: 0,
+            verdict: null,
+            suggestion: null,
+            sources: null,
+            status: null,
+            reason: "주관적 표현",
+          },
+        ],
+      });
+
+      const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
+      const opinion = result.sentences[0];
+
+      expect(opinion.type).toBe("opinion");
+      expect(opinion).toHaveProperty("reason", "주관적 표현");
+      expect(opinion).not.toHaveProperty("verdict");
+      expect(opinion).not.toHaveProperty("sources");
+    });
+
+    it("summary를 올바르게 계산해야 한다", async () => {
+      mockFactCheckRepository.findById.mockResolvedValue({
+        id: factCheckId,
+        title: "제목",
+        originalText: "텍스트",
+        createdAt: new Date("2026-01-01"),
+        sentences: [
+          {
+            id: 1,
+            type: "CLAIM",
+            text: "참 문장",
+            position: 0,
+            verdict: "TRUE",
+            suggestion: null,
+            sources: [],
+            status: "PENDING",
+            reason: null,
+          },
+          {
+            id: 2,
+            type: "CLAIM",
+            text: "거짓 문장",
+            position: 1,
+            verdict: "FALSE",
+            suggestion: "수정",
+            sources: [],
+            status: "PENDING",
+            reason: null,
+          },
+          {
+            id: 3,
+            type: "OPINION",
+            text: "의견",
+            position: 2,
+            verdict: null,
+            suggestion: null,
+            sources: null,
+            status: null,
+            reason: "주관적",
+          },
+        ],
+      });
+
+      const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
+
+      expect(result.summary).toEqual({
+        total: 3,
+        true: 1,
+        false: 1,
+        opinion: 1,
+      });
+    });
+
+    it("존재하지 않는 ID면 NotFoundException을 던져야 한다", async () => {
+      mockFactCheckRepository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.getFactCheckById(mockAuthenticatedUser, "nonexistent-id"),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe("deleteFactCheck", () => {
+    const factCheckId = "fc-123";
+
+    it("팩트체크를 정상적으로 삭제해야 한다", async () => {
+      mockFactCheckRepository.deleteById.mockResolvedValue(true);
+
+      const result = await service.deleteFactCheck(mockAuthenticatedUser, factCheckId);
+
+      expect(result).toEqual({ success: true });
+      expect(mockFactCheckRepository.deleteById).toHaveBeenCalledWith(
+        mockAuthenticatedUser.userId,
+        factCheckId,
+      );
+    });
+
+    it("존재하지 않는 팩트체크면 NotFoundException을 던져야 한다", async () => {
+      mockFactCheckRepository.deleteById.mockResolvedValue(false);
+
+      await expect(
+        service.deleteFactCheck(mockAuthenticatedUser, "nonexistent-id"),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it("다른 사용자의 팩트체크면 NotFoundException을 던져야 한다", async () => {
+      mockFactCheckRepository.deleteById.mockResolvedValue(false);
+
+      await expect(service.deleteFactCheck(mockAuthenticatedUser, factCheckId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

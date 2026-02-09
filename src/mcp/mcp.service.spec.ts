@@ -16,7 +16,20 @@ jest.mock("uuid", () => ({
 
 describe("McpService", () => {
   let service: McpService;
-  let mockAxiosPost: jest.Mock;
+
+  const mockConfigService = {
+    getOrThrow: jest.fn().mockReturnValue("http://localhost:8000"),
+  };
+
+  const mockHttpService = {
+    axiosRef: {
+      post: jest.fn(),
+      interceptors: {
+        request: { use: jest.fn() },
+        response: { use: jest.fn() },
+      },
+    },
+  };
 
   const mockMcpResponse: McpResponse = {
     title: "테스트 제목",
@@ -43,29 +56,16 @@ describe("McpService", () => {
   };
 
   beforeEach(async () => {
-    mockAxiosPost = jest.fn();
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         McpService,
         {
           provide: ConfigService,
-          useValue: {
-            getOrThrow: jest.fn().mockReturnValue("http://localhost:8000"),
-          },
+          useValue: mockConfigService,
         },
         {
           provide: HttpService,
-          useValue: {
-            axiosRef: {
-              post: mockAxiosPost,
-              // axios-retry가 초기화 시 interceptors에 접근
-              interceptors: {
-                request: { use: jest.fn() },
-                response: { use: jest.fn() },
-              },
-            },
-          },
+          useValue: mockHttpService,
         },
       ],
     }).compile();
@@ -73,13 +73,9 @@ describe("McpService", () => {
     service = module.get<McpService>(McpService);
   });
 
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
   describe("analyze", () => {
     it("정상 응답 시 McpResponse를 반환해야 한다", async () => {
-      mockAxiosPost.mockResolvedValue({
+      mockHttpService.axiosRef.post.mockResolvedValue({
         data: {
           jsonrpc: "2.0",
           id: "test-id",
@@ -101,23 +97,26 @@ describe("McpService", () => {
       expect(result.sentences[0].type).toBe("claim");
       expect(result.sentences[1].type).toBe("opinion");
 
-      expect(mockAxiosPost).toHaveBeenCalledWith("http://localhost:8000/api/factcheck", {
-        jsonrpc: "2.0",
-        id: "test-uuid",
-        method: "tools/call",
-        params: {
-          name: "factcheck",
-          arguments: {
-            text: "테스트 텍스트",
-            whitelist: [],
-            blacklist: [],
+      expect(mockHttpService.axiosRef.post).toHaveBeenCalledWith(
+        "http://localhost:8000/api/factcheck",
+        {
+          jsonrpc: "2.0",
+          id: "test-uuid",
+          method: "tools/call",
+          params: {
+            name: "factcheck",
+            arguments: {
+              text: "테스트 텍스트",
+              whitelist: [],
+              blacklist: [],
+            },
           },
         },
-      });
+      );
     });
 
     it("요청 형식이 요구사항과 일치해야 한다 (whitelist, blacklist 포함)", async () => {
-      mockAxiosPost.mockResolvedValue({
+      mockHttpService.axiosRef.post.mockResolvedValue({
         data: {
           jsonrpc: "2.0",
           id: "test-id",
@@ -133,7 +132,7 @@ describe("McpService", () => {
 
       await service.analyze(text, filters);
 
-      expect(mockAxiosPost).toHaveBeenCalledWith(
+      expect(mockHttpService.axiosRef.post).toHaveBeenCalledWith(
         expect.stringContaining("/api/factcheck"),
         expect.objectContaining({
           jsonrpc: "2.0",
@@ -157,14 +156,14 @@ describe("McpService", () => {
         response: { status: 500, statusText: "Internal Server Error" },
         isAxiosError: true,
       });
-      mockAxiosPost.mockRejectedValue(axiosError);
+      mockHttpService.axiosRef.post.mockRejectedValue(axiosError);
 
       await expect(service.analyze("테스트 텍스트")).rejects.toThrow(BadGatewayException);
       await expect(service.analyze("테스트 텍스트")).rejects.toThrow("MCP_ERROR");
     });
 
     it("네트워크 오류 시 BadGatewayException을 던져야 한다", async () => {
-      mockAxiosPost.mockRejectedValue(new Error("Network error"));
+      mockHttpService.axiosRef.post.mockRejectedValue(new Error("Network error"));
 
       await expect(service.analyze("테스트 텍스트")).rejects.toThrow(BadGatewayException);
     });
@@ -172,7 +171,7 @@ describe("McpService", () => {
     it("타임아웃 시 GatewayTimeoutException을 던져야 한다", async () => {
       const axiosError = new AxiosError("timeout of 30000ms exceeded");
       axiosError.code = "ECONNABORTED";
-      mockAxiosPost.mockRejectedValue(axiosError);
+      mockHttpService.axiosRef.post.mockRejectedValue(axiosError);
 
       await expect(service.analyze("테스트 텍스트")).rejects.toThrow(GatewayTimeoutException);
       await expect(service.analyze("테스트 텍스트")).rejects.toThrow("MCP_TIMEOUT");
@@ -181,7 +180,7 @@ describe("McpService", () => {
     it("연결 실패 시 ServiceUnavailableException을 던져야 한다", async () => {
       const axiosError = new AxiosError("connect ECONNREFUSED");
       axiosError.code = "ECONNREFUSED";
-      mockAxiosPost.mockRejectedValue(axiosError);
+      mockHttpService.axiosRef.post.mockRejectedValue(axiosError);
 
       await expect(service.analyze("테스트 텍스트")).rejects.toThrow(ServiceUnavailableException);
       await expect(service.analyze("테스트 텍스트")).rejects.toThrow("MCP_UNAVAILABLE");

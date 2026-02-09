@@ -69,10 +69,6 @@ describe("AuthService", () => {
     jest.clearAllMocks();
   });
 
-  it("정의되어 있어야 합니다", () => {
-    expect(service).toBeDefined();
-  });
-
   describe("validateOAuthLogin", () => {
     const profile: GoogleProfile = {
       email: "test@example.com",
