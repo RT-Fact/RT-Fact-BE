@@ -48,7 +48,7 @@ export class McpService {
 
     try {
       const response = await this.httpService.axiosRef.post<JsonRpcResponse>(
-        `${this.mcpServerUrl}/mcp`,
+        `${this.mcpServerUrl}/api/factcheck`,
         {
           jsonrpc: JSON_RPC.VERSION,
           id: uuidv4(),

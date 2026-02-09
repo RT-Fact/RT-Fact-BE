@@ -25,11 +25,17 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   USER_NOT_FOUND: "사용자를 찾을 수 없습니다.",
   INVALID_AUTH_CODE: "유효하지 않거나 만료된 인증 코드입니다.",
   GUEST_NOT_ALLOWED: "게스트는 이 기능을 이용할 수 없습니다.",
+  INVALID_SHARED_SECRET: "내부 통신 인증에 실패했습니다.",
 
   // Settings
   DUPLICATE_DOMAIN: "이미 등록된 도메인입니다.",
   DOMAIN_CONFLICT: "해당 도메인이 다른 목록에 이미 존재합니다.",
   INVALID_DOMAIN: "올바른 도메인 형식이 아닙니다.",
+
+  // API Keys
+  API_KEY_NOT_FOUND: "API 키를 찾을 수 없거나 접근 권한이 없습니다.",
+  INVALID_API_KEY_FORMAT: "유효하지 않은 API 키 형식입니다.",
+  API_KEY_LIMIT_EXCEEDED: "생성 가능한 API 키 개수를 초과했습니다.",
 
   // Validation
   VALIDATION_ERROR: "입력값이 올바르지 않습니다.",
