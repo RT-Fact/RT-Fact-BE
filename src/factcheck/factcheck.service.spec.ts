@@ -6,61 +6,7 @@ import type { McpResponse } from "../mcp/types/mcp.types";
 import { SettingsService } from "../settings/settings.service";
 import { FactCheckService } from "./factcheck.service";
 import { FactCheckRepository } from "./repositories/factcheck.repository";
-
-interface MockDbSentence {
-  id: string;
-  type: "CLAIM" | "OPINION";
-  text: string;
-  position: number;
-  verdict: "TRUE" | "FALSE" | null;
-  suggestion: string | null;
-  sources: Array<{ title: string; url: string }> | null;
-  status: "PENDING" | "APPLIED" | "IGNORED" | null;
-  reason: string | null;
-}
-
-interface MockDbFactCheck {
-  id: string;
-  title: string;
-  originalText: string;
-  createdAt: Date;
-  sentences: MockDbSentence[];
-}
-
-const createDbClaim = (overrides?: Partial<MockDbSentence>): MockDbSentence => ({
-  id: "1",
-  type: "CLAIM",
-  text: "검증 문장",
-  position: 0,
-  verdict: "TRUE",
-  suggestion: null,
-  sources: [{ title: "출처", url: "https://example.com" }],
-  status: "PENDING",
-  reason: null,
-  ...overrides,
-});
-
-const createDbOpinion = (overrides?: Partial<MockDbSentence>): MockDbSentence => ({
-  id: "2",
-  type: "OPINION",
-  text: "의견 문장",
-  position: 0,
-  verdict: null,
-  suggestion: null,
-  sources: null,
-  status: null,
-  reason: "주관적 표현",
-  ...overrides,
-});
-
-const createDbFactCheck = (overrides?: Partial<MockDbFactCheck>): MockDbFactCheck => ({
-  id: "fc-123",
-  title: "제목",
-  originalText: "텍스트",
-  createdAt: new Date("2026-01-01"),
-  sentences: [],
-  ...overrides,
-});
+import { createDbClaim, createDbFactCheck, createDbOpinion } from "./testing/factories";
 
 describe("FactCheckService", () => {
   let service: FactCheckService;

@@ -9,12 +9,20 @@ import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { AllExceptionsFilter } from "./all-exceptions.filter";
 
-const createMockHost = (): {
+interface MockHostOptions {
+  onJson?: (body: Record<string, unknown>) => void;
+}
+
+const createMockHost = (
+  options?: MockHostOptions,
+): {
   host: ArgumentsHost;
   mockStatus: jest.Mock;
   mockJson: jest.Mock;
 } => {
-  const mockJson = jest.fn();
+  const mockJson = jest.fn((body: Record<string, unknown>) => {
+    options?.onJson?.(body);
+  });
   const mockStatus = jest.fn().mockReturnValue({ json: mockJson });
   const host: ArgumentsHost = {
     switchToHttp: jest.fn().mockReturnValue({
@@ -34,6 +42,9 @@ const createMockHost = (): {
 describe("AllExceptionsFilter", () => {
   let filter: AllExceptionsFilter;
   let devFilter: AllExceptionsFilter;
+  let host: ArgumentsHost;
+  let mockStatus: jest.Mock;
+  let mockJson: jest.Mock;
 
   const mockConfigService = {
     get: jest.fn().mockReturnValue("production"),
@@ -55,11 +66,16 @@ describe("AllExceptionsFilter", () => {
     }).compile();
 
     devFilter = devModule.get<AllExceptionsFilter>(AllExceptionsFilter);
+
+    ({ host, mockStatus, mockJson } = createMockHost());
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   describe("catch", () => {
     it("HttpException 문자열 응답에서 ERROR_MESSAGES를 조회해야 한다", () => {
-      const { host, mockStatus, mockJson } = createMockHost();
       const exception = new HttpException("EMPTY_TEXT", HttpStatus.BAD_REQUEST);
 
       filter.catch(exception, host);
@@ -75,7 +91,6 @@ describe("AllExceptionsFilter", () => {
     });
 
     it("ValidationError를 올바르게 처리해야 한다", () => {
-      const { host, mockStatus, mockJson } = createMockHost();
       const exception = new BadRequestException({
         message: ["이메일 형식이 올바르지 않습니다."],
         error: "Bad Request",
@@ -93,7 +108,6 @@ describe("AllExceptionsFilter", () => {
     });
 
     it("ValidationError 배열의 첫 메시지를 사용해야 한다", () => {
-      const { host, mockJson } = createMockHost();
       const exception = new BadRequestException({
         message: ["첫 번째 에러", "두 번째 에러"],
         error: "Bad Request",
@@ -109,7 +123,6 @@ describe("AllExceptionsFilter", () => {
     });
 
     it("HttpException 객체 응답에서 ERROR_MESSAGES에 있는 message를 매핑해야 한다", () => {
-      const { host, mockJson } = createMockHost();
       const exception = new NotFoundException("FACTCHECK_NOT_FOUND");
 
       filter.catch(exception, host);
@@ -123,7 +136,6 @@ describe("AllExceptionsFilter", () => {
     });
 
     it("5xx 에러를 '서버 오류가 발생했습니다.'로 마스킹해야 한다", () => {
-      const { host, mockJson } = createMockHost();
       const exception = new Error("DB connection failed");
 
       filter.catch(exception, host);
@@ -137,7 +149,6 @@ describe("AllExceptionsFilter", () => {
     });
 
     it("5xx 에러의 statusCode를 500으로 통일해야 한다", () => {
-      const { host, mockStatus } = createMockHost();
       const exception = new HttpException("서버 에러", HttpStatus.BAD_GATEWAY);
 
       filter.catch(exception, host);
@@ -147,21 +158,11 @@ describe("AllExceptionsFilter", () => {
 
     it("dev 환경 4xx에서 stack trace를 포함해야 한다", () => {
       let capturedResponse: Record<string, unknown> = {};
-      const capturingJson = jest.fn((body: Record<string, unknown>) => {
-        capturedResponse = body;
+      const { host: capturingHost } = createMockHost({
+        onJson: (body) => {
+          capturedResponse = body;
+        },
       });
-      const capturingStatus = jest.fn().mockReturnValue({ json: capturingJson });
-      const capturingHost: ArgumentsHost = {
-        switchToHttp: jest.fn().mockReturnValue({
-          getResponse: jest.fn().mockReturnValue({ status: capturingStatus }),
-          getRequest: jest.fn().mockReturnValue({ method: "GET", url: "/test" }),
-        }),
-        switchToRpc: jest.fn(),
-        switchToWs: jest.fn(),
-        getArgs: jest.fn(),
-        getArgByIndex: jest.fn(),
-        getType: jest.fn(),
-      };
       const exception = new BadRequestException("EMPTY_TEXT");
 
       devFilter.catch(exception, capturingHost);
@@ -171,21 +172,11 @@ describe("AllExceptionsFilter", () => {
 
     it("production 환경에서 stack trace를 포함하지 않아야 한다", () => {
       let capturedResponse: Record<string, unknown> = {};
-      const capturingJson = jest.fn((body: Record<string, unknown>) => {
-        capturedResponse = body;
+      const { host: capturingHost } = createMockHost({
+        onJson: (body) => {
+          capturedResponse = body;
+        },
       });
-      const capturingStatus = jest.fn().mockReturnValue({ json: capturingJson });
-      const capturingHost: ArgumentsHost = {
-        switchToHttp: jest.fn().mockReturnValue({
-          getResponse: jest.fn().mockReturnValue({ status: capturingStatus }),
-          getRequest: jest.fn().mockReturnValue({ method: "GET", url: "/test" }),
-        }),
-        switchToRpc: jest.fn(),
-        switchToWs: jest.fn(),
-        getArgs: jest.fn(),
-        getArgByIndex: jest.fn(),
-        getType: jest.fn(),
-      };
       const exception = new BadRequestException("EMPTY_TEXT");
 
       filter.catch(exception, capturingHost);
@@ -194,7 +185,6 @@ describe("AllExceptionsFilter", () => {
     });
 
     it("ERROR_MESSAGES에 없는 문자열 응답은 원본을 그대로 사용해야 한다", () => {
-      const { host, mockJson } = createMockHost();
       const exception = new HttpException("unknown", 418);
 
       filter.catch(exception, host);
@@ -209,7 +199,6 @@ describe("AllExceptionsFilter", () => {
     });
 
     it("일반 Error(비-HttpException)를 500으로 처리해야 한다", () => {
-      const { host, mockStatus, mockJson } = createMockHost();
       const exception = new TypeError("Cannot read properties of undefined");
 
       filter.catch(exception, host);
