@@ -5,6 +5,25 @@ import { ApiKeysService } from "./api-keys.service";
 import { API_KEY_CACHE_TTL, API_KEY_PREFIX, DEFAULT_MAX_API_KEYS } from "./constants";
 import { ApiKeysRepository } from "./repositories/api-keys.repository";
 
+interface MockApiKeyRecord {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  keyHash: string;
+  userId: string;
+  createdAt: Date;
+}
+
+const createApiKeyRecord = (overrides?: Partial<MockApiKeyRecord>): MockApiKeyRecord => ({
+  id: "key-id",
+  name: "My API Key",
+  keyPrefix: "rtf_abcd1234",
+  keyHash: "hashed",
+  userId: "user-123",
+  createdAt: new Date("2026-01-01"),
+  ...overrides,
+});
+
 describe("ApiKeysService", () => {
   let service: ApiKeysService;
 
@@ -95,13 +114,7 @@ describe("ApiKeysService", () => {
 
     it("API 키를 정상적으로 생성해야 한다", async () => {
       mockApiKeysRepository.countByUserId.mockResolvedValue(0);
-      mockApiKeysRepository.create.mockResolvedValue({
-        id: "key-id",
-        name: "My API Key",
-        keyPrefix: "rtf_abcd1234",
-        keyHash: "hashed",
-        createdAt: new Date("2026-01-01"),
-      });
+      mockApiKeysRepository.create.mockResolvedValue(createApiKeyRecord());
 
       const result = await service.createApiKey(userId, createDto);
 
@@ -114,13 +127,7 @@ describe("ApiKeysService", () => {
 
     it("secretKey가 rtf_ 접두사로 시작해야 한다", async () => {
       mockApiKeysRepository.countByUserId.mockResolvedValue(0);
-      mockApiKeysRepository.create.mockResolvedValue({
-        id: "key-id",
-        name: "My API Key",
-        keyPrefix: "rtf_abcd1234",
-        keyHash: "hashed",
-        createdAt: new Date(),
-      });
+      mockApiKeysRepository.create.mockResolvedValue(createApiKeyRecord());
 
       const result = await service.createApiKey(userId, createDto);
 
@@ -133,13 +140,7 @@ describe("ApiKeysService", () => {
       let savedKeyHash = "";
       mockApiKeysRepository.create.mockImplementation((data: { keyHash: string }) => {
         savedKeyHash = data.keyHash;
-        return Promise.resolve({
-          id: "key-id",
-          name: "My API Key",
-          keyPrefix: "rtf_abcd1234",
-          keyHash: data.keyHash,
-          createdAt: new Date(),
-        });
+        return Promise.resolve(createApiKeyRecord({ keyHash: data.keyHash }));
       });
 
       await service.createApiKey(userId, createDto);
@@ -159,11 +160,7 @@ describe("ApiKeysService", () => {
     const keyId = "key-id";
 
     it("키를 정상적으로 삭제해야 한다", async () => {
-      mockApiKeysRepository.findById.mockResolvedValue({
-        id: keyId,
-        userId,
-        keyPrefix: "rtf_abcd1234",
-      });
+      mockApiKeysRepository.findById.mockResolvedValue(createApiKeyRecord());
       mockApiKeysRepository.delete.mockResolvedValue(undefined);
       mockRedisService.del.mockResolvedValue(undefined);
 
@@ -174,11 +171,7 @@ describe("ApiKeysService", () => {
 
     it("Redis 캐시도 함께 삭제해야 한다", async () => {
       const prefix = "rtf_abcd1234";
-      mockApiKeysRepository.findById.mockResolvedValue({
-        id: keyId,
-        userId,
-        keyPrefix: prefix,
-      });
+      mockApiKeysRepository.findById.mockResolvedValue(createApiKeyRecord({ keyPrefix: prefix }));
       mockApiKeysRepository.delete.mockResolvedValue(undefined);
       mockRedisService.del.mockResolvedValue(undefined);
 
@@ -194,11 +187,8 @@ describe("ApiKeysService", () => {
     });
 
     it("다른 사용자의 키면 NotFoundException을 던져야 한다", async () => {
-      mockApiKeysRepository.findById.mockResolvedValue({
-        id: keyId,
-        userId: "other-user",
-        keyPrefix: "rtf_abcd1234",
-      });
+      const otherUserKey = createApiKeyRecord({ userId: "other-user" });
+      mockApiKeysRepository.findById.mockResolvedValue(otherUserKey);
 
       await expect(service.deleteApiKey(userId, keyId)).rejects.toThrow(NotFoundException);
     });
@@ -241,11 +231,9 @@ describe("ApiKeysService", () => {
       mockRedisService.get.mockResolvedValue("invalid json{{{");
       mockRedisService.del.mockResolvedValue(undefined);
       mockRedisService.set.mockResolvedValue(undefined);
-      mockApiKeysRepository.findByPrefix.mockResolvedValue({
-        userId: "user-123",
-        keyHash,
-        keyPrefix: prefix,
-      });
+      mockApiKeysRepository.findByPrefix.mockResolvedValue(
+        createApiKeyRecord({ keyHash, keyPrefix: prefix }),
+      );
 
       await service.verifyApiKey(apiKey);
 
@@ -266,11 +254,11 @@ describe("ApiKeysService", () => {
 
     it("해시 불일치 시 { valid: false }를 반환하고 캐시해야 한다", async () => {
       mockRedisService.get.mockResolvedValue(null);
-      mockApiKeysRepository.findByPrefix.mockResolvedValue({
-        userId: "user-123",
+      const keyWithMismatchedHash = createApiKeyRecord({
         keyHash: "completely_different_hash_value_that_does_not_match_at_all_x",
         keyPrefix: "rtf_abcdef12",
       });
+      mockApiKeysRepository.findByPrefix.mockResolvedValue(keyWithMismatchedHash);
       mockRedisService.set.mockResolvedValue(undefined);
 
       const result = await service.verifyApiKey("rtf_abcdef123456rest_of_key");
@@ -285,11 +273,9 @@ describe("ApiKeysService", () => {
       const keyHash = service["hashKey"](apiKey);
 
       mockRedisService.get.mockResolvedValue(null);
-      mockApiKeysRepository.findByPrefix.mockResolvedValue({
-        userId: "user-123",
-        keyHash,
-        keyPrefix: prefix,
-      });
+      mockApiKeysRepository.findByPrefix.mockResolvedValue(
+        createApiKeyRecord({ keyHash, keyPrefix: prefix }),
+      );
       mockRedisService.set.mockResolvedValue(undefined);
 
       const result = await service.verifyApiKey(apiKey);
@@ -303,11 +289,9 @@ describe("ApiKeysService", () => {
       const keyHash = service["hashKey"](apiKey);
 
       mockRedisService.get.mockResolvedValue(null);
-      mockApiKeysRepository.findByPrefix.mockResolvedValue({
-        userId: "user-123",
-        keyHash,
-        keyPrefix: apiKey.substring(0, 12),
-      });
+      mockApiKeysRepository.findByPrefix.mockResolvedValue(
+        createApiKeyRecord({ keyHash, keyPrefix: apiKey.substring(0, 12) }),
+      );
       mockRedisService.set.mockResolvedValue(undefined);
 
       await service.verifyApiKey(apiKey);
@@ -326,8 +310,20 @@ describe("ApiKeysService", () => {
     it("사용자의 API 키 목록을 반환해야 한다", async () => {
       const now = new Date();
       mockApiKeysRepository.findByUserId.mockResolvedValue([
-        { id: "key-1", name: "Key 1", keyPrefix: "rtf_aaaa1111", keyHash: "hash1", createdAt: now },
-        { id: "key-2", name: "Key 2", keyPrefix: "rtf_bbbb2222", keyHash: "hash2", createdAt: now },
+        createApiKeyRecord({
+          id: "key-1",
+          name: "Key 1",
+          keyPrefix: "rtf_aaaa1111",
+          keyHash: "hash1",
+          createdAt: now,
+        }),
+        createApiKeyRecord({
+          id: "key-2",
+          name: "Key 2",
+          keyPrefix: "rtf_bbbb2222",
+          keyHash: "hash2",
+          createdAt: now,
+        }),
       ]);
 
       const result = await service.listApiKeys(userId);
@@ -343,13 +339,12 @@ describe("ApiKeysService", () => {
 
     it("keyHash를 응답에 포함하지 않아야 한다", async () => {
       mockApiKeysRepository.findByUserId.mockResolvedValue([
-        {
+        createApiKeyRecord({
           id: "key-1",
           name: "Key 1",
           keyPrefix: "rtf_aaaa1111",
           keyHash: "should_not_appear",
-          createdAt: new Date(),
-        },
+        }),
       ]);
 
       const result = await service.listApiKeys(userId);

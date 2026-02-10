@@ -7,6 +7,61 @@ import { SettingsService } from "../settings/settings.service";
 import { FactCheckService } from "./factcheck.service";
 import { FactCheckRepository } from "./repositories/factcheck.repository";
 
+interface MockDbSentence {
+  id: string;
+  type: "CLAIM" | "OPINION";
+  text: string;
+  position: number;
+  verdict: "TRUE" | "FALSE" | null;
+  suggestion: string | null;
+  sources: Array<{ title: string; url: string }> | null;
+  status: "PENDING" | "APPLIED" | "IGNORED" | null;
+  reason: string | null;
+}
+
+interface MockDbFactCheck {
+  id: string;
+  title: string;
+  originalText: string;
+  createdAt: Date;
+  sentences: MockDbSentence[];
+}
+
+const createDbClaim = (overrides?: Partial<MockDbSentence>): MockDbSentence => ({
+  id: "1",
+  type: "CLAIM",
+  text: "검증 문장",
+  position: 0,
+  verdict: "TRUE",
+  suggestion: null,
+  sources: [{ title: "출처", url: "https://example.com" }],
+  status: "PENDING",
+  reason: null,
+  ...overrides,
+});
+
+const createDbOpinion = (overrides?: Partial<MockDbSentence>): MockDbSentence => ({
+  id: "2",
+  type: "OPINION",
+  text: "의견 문장",
+  position: 0,
+  verdict: null,
+  suggestion: null,
+  sources: null,
+  status: null,
+  reason: "주관적 표현",
+  ...overrides,
+});
+
+const createDbFactCheck = (overrides?: Partial<MockDbFactCheck>): MockDbFactCheck => ({
+  id: "fc-123",
+  title: "제목",
+  originalText: "텍스트",
+  createdAt: new Date("2026-01-01"),
+  sentences: [],
+  ...overrides,
+});
+
 describe("FactCheckService", () => {
   let service: FactCheckService;
 
@@ -19,6 +74,7 @@ describe("FactCheckService", () => {
     findByUserId: jest.fn(),
     findById: jest.fn(),
     deleteById: jest.fn(),
+    updateClaimStatus: jest.fn(),
   };
 
   const mockGuestRepository = {
@@ -341,25 +397,9 @@ describe("FactCheckService", () => {
     const factCheckId = "fc-123";
 
     it("팩트체크 결과를 반환해야 한다", async () => {
-      mockFactCheckRepository.findById.mockResolvedValue({
-        id: factCheckId,
-        title: "테스트 제목",
-        originalText: "원본 텍스트",
-        createdAt: new Date("2026-01-01"),
-        sentences: [
-          {
-            id: 1,
-            type: "CLAIM",
-            text: "검증 문장",
-            position: 0,
-            verdict: "TRUE",
-            suggestion: null,
-            sources: [{ title: "출처", url: "https://example.com" }],
-            status: "PENDING",
-            reason: null,
-          },
-        ],
-      });
+      mockFactCheckRepository.findById.mockResolvedValue(
+        createDbFactCheck({ sentences: [createDbClaim()] }),
+      );
 
       const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
 
@@ -370,25 +410,10 @@ describe("FactCheckService", () => {
     });
 
     it("claim 문장을 올바르게 변환해야 한다", async () => {
-      mockFactCheckRepository.findById.mockResolvedValue({
-        id: factCheckId,
-        title: "제목",
-        originalText: "텍스트",
-        createdAt: new Date("2026-01-01"),
-        sentences: [
-          {
-            id: 1,
-            type: "CLAIM",
-            text: "검증 문장",
-            position: 0,
-            verdict: "TRUE",
-            suggestion: "수정 제안",
-            sources: [{ title: "출처", url: "https://example.com" }],
-            status: "APPLIED",
-            reason: null,
-          },
-        ],
-      });
+      const appliedClaim = createDbClaim({ suggestion: "수정 제안", status: "APPLIED" });
+      mockFactCheckRepository.findById.mockResolvedValue(
+        createDbFactCheck({ sentences: [appliedClaim] }),
+      );
 
       const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
       const claim = result.sentences[0];
@@ -401,25 +426,9 @@ describe("FactCheckService", () => {
     });
 
     it("opinion 문장을 올바르게 변환해야 한다", async () => {
-      mockFactCheckRepository.findById.mockResolvedValue({
-        id: factCheckId,
-        title: "제목",
-        originalText: "텍스트",
-        createdAt: new Date("2026-01-01"),
-        sentences: [
-          {
-            id: 2,
-            type: "OPINION",
-            text: "의견 문장",
-            position: 0,
-            verdict: null,
-            suggestion: null,
-            sources: null,
-            status: null,
-            reason: "주관적 표현",
-          },
-        ],
-      });
+      mockFactCheckRepository.findById.mockResolvedValue(
+        createDbFactCheck({ sentences: [createDbOpinion()] }),
+      );
 
       const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
       const opinion = result.sentences[0];
@@ -431,47 +440,18 @@ describe("FactCheckService", () => {
     });
 
     it("summary를 올바르게 계산해야 한다", async () => {
-      mockFactCheckRepository.findById.mockResolvedValue({
-        id: factCheckId,
-        title: "제목",
-        originalText: "텍스트",
-        createdAt: new Date("2026-01-01"),
-        sentences: [
-          {
-            id: 1,
-            type: "CLAIM",
-            text: "참 문장",
-            position: 0,
-            verdict: "TRUE",
-            suggestion: null,
-            sources: [],
-            status: "PENDING",
-            reason: null,
-          },
-          {
-            id: 2,
-            type: "CLAIM",
-            text: "거짓 문장",
-            position: 1,
-            verdict: "FALSE",
-            suggestion: "수정",
-            sources: [],
-            status: "PENDING",
-            reason: null,
-          },
-          {
-            id: 3,
-            type: "OPINION",
-            text: "의견",
-            position: 2,
-            verdict: null,
-            suggestion: null,
-            sources: null,
-            status: null,
-            reason: "주관적",
-          },
-        ],
+      const trueClaim = createDbClaim({ text: "참 문장" });
+      const falseClaim = createDbClaim({
+        id: "2",
+        text: "거짓 문장",
+        position: 1,
+        verdict: "FALSE",
+        suggestion: "수정",
       });
+      const opinion = createDbOpinion({ id: "3", text: "의견", position: 2, reason: "주관적" });
+      mockFactCheckRepository.findById.mockResolvedValue(
+        createDbFactCheck({ sentences: [trueClaim, falseClaim, opinion] }),
+      );
 
       const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
 
@@ -481,6 +461,50 @@ describe("FactCheckService", () => {
         false: 1,
         opinion: 1,
       });
+    });
+
+    it("verdict가 null인 claim은 'FALSE'로 기본값 설정해야 한다", async () => {
+      const claimWithNullVerdict = createDbClaim({ verdict: null });
+      mockFactCheckRepository.findById.mockResolvedValue(
+        createDbFactCheck({ sentences: [claimWithNullVerdict] }),
+      );
+
+      const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
+
+      expect(result.sentences[0]).toHaveProperty("verdict", "FALSE");
+    });
+
+    it("status가 null인 claim은 'pending'으로 기본값 설정해야 한다", async () => {
+      const claimWithNullStatus = createDbClaim({ status: null });
+      mockFactCheckRepository.findById.mockResolvedValue(
+        createDbFactCheck({ sentences: [claimWithNullStatus] }),
+      );
+
+      const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
+
+      expect(result.sentences[0]).toHaveProperty("status", "pending");
+    });
+
+    it("reason이 null인 opinion은 빈 문자열로 기본값 설정해야 한다", async () => {
+      const opinionWithNullReason = createDbOpinion({ id: "1", reason: null });
+      mockFactCheckRepository.findById.mockResolvedValue(
+        createDbFactCheck({ sentences: [opinionWithNullReason] }),
+      );
+
+      const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
+
+      expect(result.sentences[0]).toHaveProperty("reason", "");
+    });
+
+    it("sources가 null인 claim은 빈 배열로 기본값 설정해야 한다", async () => {
+      const claimWithNullSources = createDbClaim({ sources: null });
+      mockFactCheckRepository.findById.mockResolvedValue(
+        createDbFactCheck({ sentences: [claimWithNullSources] }),
+      );
+
+      const result = await service.getFactCheckById(mockAuthenticatedUser, factCheckId);
+
+      expect(result.sentences[0]).toHaveProperty("sources", []);
     });
 
     it("존재하지 않는 ID면 NotFoundException을 던져야 한다", async () => {
@@ -521,6 +545,74 @@ describe("FactCheckService", () => {
       await expect(service.deleteFactCheck(mockAuthenticatedUser, factCheckId)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe("applyClaim", () => {
+    const factCheckId = "fc-123";
+    const claimId = "claim-1";
+
+    it("게스트 사용자면 DB 호출 없이 applied 상태를 반환해야 한다", async () => {
+      const result = await service.applyClaim(mockGuestUser, factCheckId, claimId);
+
+      expect(result).toEqual({ id: claimId, status: "applied" });
+      expect(mockFactCheckRepository.updateClaimStatus).not.toHaveBeenCalled();
+    });
+
+    it("인증 사용자면 updateClaimStatus를 호출해야 한다", async () => {
+      mockFactCheckRepository.updateClaimStatus.mockResolvedValue(true);
+
+      const result = await service.applyClaim(mockAuthenticatedUser, factCheckId, claimId);
+
+      expect(result).toEqual({ id: claimId, status: "applied" });
+      expect(mockFactCheckRepository.updateClaimStatus).toHaveBeenCalledWith(
+        mockAuthenticatedUser.userId,
+        factCheckId,
+        claimId,
+        "APPLIED",
+      );
+    });
+
+    it("존재하지 않는 claim이면 NotFoundException을 던져야 한다", async () => {
+      mockFactCheckRepository.updateClaimStatus.mockResolvedValue(false);
+
+      await expect(service.applyClaim(mockAuthenticatedUser, factCheckId, claimId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe("ignoreClaim", () => {
+    const factCheckId = "fc-123";
+    const claimId = "claim-1";
+
+    it("게스트 사용자면 DB 호출 없이 ignored 상태를 반환해야 한다", async () => {
+      const result = await service.ignoreClaim(mockGuestUser, factCheckId, claimId);
+
+      expect(result).toEqual({ id: claimId, status: "ignored" });
+      expect(mockFactCheckRepository.updateClaimStatus).not.toHaveBeenCalled();
+    });
+
+    it("인증 사용자면 updateClaimStatus를 호출해야 한다", async () => {
+      mockFactCheckRepository.updateClaimStatus.mockResolvedValue(true);
+
+      const result = await service.ignoreClaim(mockAuthenticatedUser, factCheckId, claimId);
+
+      expect(result).toEqual({ id: claimId, status: "ignored" });
+      expect(mockFactCheckRepository.updateClaimStatus).toHaveBeenCalledWith(
+        mockAuthenticatedUser.userId,
+        factCheckId,
+        claimId,
+        "IGNORED",
+      );
+    });
+
+    it("존재하지 않는 claim이면 NotFoundException을 던져야 한다", async () => {
+      mockFactCheckRepository.updateClaimStatus.mockResolvedValue(false);
+
+      await expect(
+        service.ignoreClaim(mockAuthenticatedUser, factCheckId, claimId),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });
