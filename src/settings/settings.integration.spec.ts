@@ -116,6 +116,26 @@ describe("Settings Integration (Controller + Service)", () => {
       );
     });
 
+    it("복수 도메인이 존재할 때 전체 목록을 반환해야 한다", async () => {
+      const user = createUser();
+      const dto = createDomainDto("new-domain.com");
+      mockRepository.findFilter.mockResolvedValue(null);
+      mockRepository.createFilter.mockResolvedValue({
+        id: 3,
+        domain: "new-domain.com",
+        listType: ListType.WHITE,
+        userId: "user-123",
+      });
+      mockRepository.findFiltersByType.mockResolvedValue([
+        { domain: "existing.com" },
+        { domain: "new-domain.com" },
+      ]);
+
+      const result = await controller.addWhitelist(user, dto);
+
+      expect(result).toEqual({ whitelist: ["existing.com", "new-domain.com"] });
+    });
+
     it("블랙리스트에 동일 도메인이 있으면 ConflictException(DOMAIN_CONFLICT)을 던져야 한다", async () => {
       const user = createUser();
       const dto = createDomainDto("conflict.com");
@@ -172,6 +192,8 @@ describe("Settings Integration (Controller + Service)", () => {
   });
 
   describe("addBlacklist", () => {
+    // 에러 분기(P2002, rethrow)는 addWhitelist에서 검증 — addFilter 공통 로직이므로 ListType 무관
+
     it("도메인을 블랙리스트에 추가하고 목록을 반환해야 한다", async () => {
       const user = createUser();
       const dto = createDomainDto("bad.com");
@@ -209,45 +231,6 @@ describe("Settings Integration (Controller + Service)", () => {
       await expect(promise).rejects.toThrow(new ConflictException(ERROR_CODES.DOMAIN_CONFLICT));
       expect(mockRepository.createFilter).not.toHaveBeenCalled();
     });
-
-    it("이미 블랙리스트에 동일 도메인이 있으면 ConflictException(DUPLICATE_DOMAIN)을 던져야 한다", async () => {
-      const user = createUser();
-      const dto = createDomainDto("duplicate.com");
-      mockRepository.findFilter.mockResolvedValue(null);
-      const prismaError = new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
-        code: "P2002",
-        clientVersion: "5.0.0",
-      });
-      mockRepository.createFilter.mockRejectedValue(prismaError);
-
-      const promise = controller.addBlacklist(user, dto);
-      await expect(promise).rejects.toThrow(new ConflictException(ERROR_CODES.DUPLICATE_DOMAIN));
-    });
-
-    it("PrismaClientKnownRequestError이지만 P2002가 아닌 에러는 그대로 rethrow해야 한다", async () => {
-      const user = createUser();
-      const dto = createDomainDto("fk-error.com");
-      mockRepository.findFilter.mockResolvedValue(null);
-      const prismaError = new Prisma.PrismaClientKnownRequestError("FK constraint failed", {
-        code: "P2003",
-        clientVersion: "5.0.0",
-      });
-      mockRepository.createFilter.mockRejectedValue(prismaError);
-
-      const promise = controller.addBlacklist(user, dto);
-      await expect(promise).rejects.toThrow(Prisma.PrismaClientKnownRequestError);
-      await expect(controller.addBlacklist(user, dto)).rejects.not.toThrow(ConflictException);
-    });
-
-    it("Prisma 이외의 에러는 그대로 rethrow해야 한다", async () => {
-      const user = createUser();
-      const dto = createDomainDto("error.com");
-      mockRepository.findFilter.mockResolvedValue(null);
-      const unknownError = new Error("DB connection lost");
-      mockRepository.createFilter.mockRejectedValue(unknownError);
-
-      await expect(controller.addBlacklist(user, dto)).rejects.toThrow("DB connection lost");
-    });
   });
 
   describe("deleteWhitelist", () => {
@@ -274,6 +257,17 @@ describe("Settings Integration (Controller + Service)", () => {
       const result = await controller.deleteWhitelist(user, "last.com");
 
       expect(result).toEqual({ whitelist: [] });
+    });
+
+    // deleteMany는 존재하지 않는 도메인도 {count: 0}을 반환 — 멱등성 보장 검증
+    it("존재하지 않는 도메인 삭제 시 에러 없이 현재 목록을 반환해야 한다", async () => {
+      const user = createUser();
+      mockRepository.deleteFilter.mockResolvedValue({ count: 0 });
+      mockRepository.findFiltersByType.mockResolvedValue([{ domain: "existing.com" }]);
+
+      const result = await controller.deleteWhitelist(user, "non-existent.com");
+
+      expect(result).toEqual({ whitelist: ["existing.com"] });
     });
   });
 
