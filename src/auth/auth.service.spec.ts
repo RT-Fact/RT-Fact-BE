@@ -5,7 +5,7 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import { PrismaService } from "../prisma/prisma.service";
 import { RedisService } from "../redis/redis.service";
 import { AuthService } from "./auth.service";
-import { REFRESH_TOKEN_TTL_MS } from "./constants";
+import { GUEST_CONFIG, REFRESH_TOKEN_TTL_MS } from "./constants";
 import { GuestRepository } from "./repositories/guest.repository";
 import type { GoogleProfile, UserJwtPayload } from "./types/auth.types";
 
@@ -194,6 +194,49 @@ describe("AuthService", () => {
 
       // when & then
       await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe("getOrCreateGuest", () => {
+    const ip = "192.168.1.1";
+
+    it("기존 게스트 정보가 있으면 그대로 반환해야 한다", async () => {
+      const existingGuest = { remainingUses: 2, createdAt: 1700000000000 };
+      mockGuestRepository.getGuestInfo.mockResolvedValue(existingGuest);
+
+      const result = await service.getOrCreateGuest(ip);
+
+      expect(result).toEqual(existingGuest);
+    });
+
+    it("기존 게스트 정보가 있으면 setGuestInfo를 호출하지 않아야 한다", async () => {
+      mockGuestRepository.getGuestInfo.mockResolvedValue({
+        remainingUses: 2,
+        createdAt: 1700000000000,
+      });
+
+      await service.getOrCreateGuest(ip);
+
+      expect(mockGuestRepository.setGuestInfo).not.toHaveBeenCalled();
+    });
+
+    it("게스트 정보가 없으면 새로 생성하여 저장해야 한다", async () => {
+      mockGuestRepository.getGuestInfo.mockResolvedValue(null);
+
+      const result = await service.getOrCreateGuest(ip);
+
+      expect(mockGuestRepository.setGuestInfo).toHaveBeenCalledTimes(1);
+      expect(mockGuestRepository.setGuestInfo).toHaveBeenCalledWith(ip, result);
+      expect(result.remainingUses).toBe(GUEST_CONFIG.INITIAL_USES);
+      expect(typeof result.createdAt).toBe("number");
+    });
+
+    it("새 게스트의 remainingUses가 GUEST_CONFIG.INITIAL_USES여야 한다", async () => {
+      mockGuestRepository.getGuestInfo.mockResolvedValue(null);
+
+      const result = await service.getOrCreateGuest(ip);
+
+      expect(result.remainingUses).toBe(GUEST_CONFIG.INITIAL_USES);
     });
   });
 });
