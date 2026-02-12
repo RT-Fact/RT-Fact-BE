@@ -6,7 +6,10 @@ import type { FactCheckRequest } from "./types/factcheck.types";
 
 describe("FactCheckController", () => {
   let controller: FactCheckController;
-  let mockProcessFactCheck: jest.Mock;
+
+  const mockFactCheckService = {
+    processFactCheck: jest.fn(),
+  };
 
   const mockFactCheckResponse: FactCheckResponse = {
     id: "factcheck-123",
@@ -34,16 +37,12 @@ describe("FactCheckController", () => {
   };
 
   beforeEach(async () => {
-    mockProcessFactCheck = jest.fn();
-
     const module: TestingModule = await Test.createTestingModule({
       controllers: [FactCheckController],
       providers: [
         {
           provide: FactCheckService,
-          useValue: {
-            processFactCheck: mockProcessFactCheck,
-          },
+          useValue: mockFactCheckService,
         },
       ],
     }).compile();
@@ -61,11 +60,11 @@ describe("FactCheckController", () => {
       const mockRequest: FactCheckRequest = { user: mockUser };
       const dto = { text: "테스트 텍스트" };
 
-      mockProcessFactCheck.mockResolvedValue(mockFactCheckResponse);
+      mockFactCheckService.processFactCheck.mockResolvedValue(mockFactCheckResponse);
 
       const result = await controller.create(mockRequest, dto);
 
-      expect(mockProcessFactCheck).toHaveBeenCalledWith(mockUser, dto.text);
+      expect(mockFactCheckService.processFactCheck).toHaveBeenCalledWith(mockUser, dto.text);
       expect(result).toEqual(mockFactCheckResponse);
     });
 
@@ -77,11 +76,11 @@ describe("FactCheckController", () => {
       const mockRequest: FactCheckRequest = { user: mockGuestUser };
       const dto = { text: "게스트 테스트" };
 
-      mockProcessFactCheck.mockResolvedValue(mockFactCheckResponse);
+      mockFactCheckService.processFactCheck.mockResolvedValue(mockFactCheckResponse);
 
       await controller.create(mockRequest, dto);
 
-      expect(mockProcessFactCheck).toHaveBeenCalledWith(mockGuestUser, dto.text);
+      expect(mockFactCheckService.processFactCheck).toHaveBeenCalledWith(mockGuestUser, dto.text);
     });
   });
 });

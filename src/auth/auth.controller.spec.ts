@@ -72,10 +72,6 @@ describe("AuthController", () => {
     controller = module.get<AuthController>(AuthController);
   });
 
-  it("정의되어 있어야 합니다", () => {
-    expect(controller).toBeDefined();
-  });
-
   describe("googleAuthCallback", () => {
     const user = {
       email: "test@example.com",
