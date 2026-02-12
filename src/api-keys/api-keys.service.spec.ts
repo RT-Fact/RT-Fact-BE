@@ -1,20 +1,12 @@
 import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { Test, type TestingModule } from "@nestjs/testing";
+import type { ApiKey } from "@prisma/client";
 import { RedisService } from "../redis/redis.service";
 import { ApiKeysService } from "./api-keys.service";
 import { API_KEY_CACHE_TTL, API_KEY_PREFIX, DEFAULT_MAX_API_KEYS } from "./constants";
 import { ApiKeysRepository } from "./repositories/api-keys.repository";
 
-interface MockApiKeyRecord {
-  id: string;
-  name: string;
-  keyPrefix: string;
-  keyHash: string;
-  userId: string;
-  createdAt: Date;
-}
-
-const createApiKeyRecord = (overrides?: Partial<MockApiKeyRecord>): MockApiKeyRecord => ({
+const createApiKeyRecord = (overrides?: Partial<ApiKey>): ApiKey => ({
   id: "key-id",
   name: "My API Key",
   keyPrefix: "rtf_abcd1234",

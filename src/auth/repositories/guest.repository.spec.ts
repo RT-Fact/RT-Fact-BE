@@ -29,6 +29,10 @@ describe("GuestRepository", () => {
     repository = module.get<GuestRepository>(GuestRepository);
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe("getGuestInfo", () => {
     it("게스트 정보가 있으면 파싱하여 반환해야 한다", async () => {
       mockRedisClient.hgetall.mockResolvedValue({

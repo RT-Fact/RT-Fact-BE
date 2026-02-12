@@ -9,20 +9,17 @@ import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { AllExceptionsFilter } from "./all-exceptions.filter";
 
-interface MockHostOptions {
-  onJson?: (body: Record<string, unknown>) => void;
-}
+type JsonBody = Record<string, unknown>;
 
-const createMockHost = (
-  options?: MockHostOptions,
-): {
+type MockJsonFn = (_body: JsonBody) => void;
+
+const createMockHost = (): {
   host: ArgumentsHost;
   mockStatus: jest.Mock;
-  mockJson: jest.Mock;
+  mockJson: jest.MockWithArgs<MockJsonFn>;
 } => {
-  const mockJson = jest.fn((body: Record<string, unknown>) => {
-    options?.onJson?.(body);
-  });
+  const jsonNoop: MockJsonFn = () => {};
+  const mockJson = jest.fn(jsonNoop);
   const mockStatus = jest.fn().mockReturnValue({ json: mockJson });
   const host: ArgumentsHost = {
     switchToHttp: jest.fn().mockReturnValue({
@@ -44,7 +41,7 @@ describe("AllExceptionsFilter", () => {
   let devFilter: AllExceptionsFilter;
   let host: ArgumentsHost;
   let mockStatus: jest.Mock;
-  let mockJson: jest.Mock;
+  let mockJson: jest.MockWithArgs<MockJsonFn>;
 
   const mockConfigService = {
     get: jest.fn().mockReturnValue("production"),
@@ -157,31 +154,21 @@ describe("AllExceptionsFilter", () => {
     });
 
     it("dev 환경 4xx에서 stack trace를 포함해야 한다", () => {
-      let capturedResponse: Record<string, unknown> = {};
-      const { host: capturingHost } = createMockHost({
-        onJson: (body) => {
-          capturedResponse = body;
-        },
-      });
+      const { host: capturingHost, mockJson: capturingJson } = createMockHost();
       const exception = new BadRequestException("EMPTY_TEXT");
 
       devFilter.catch(exception, capturingHost);
 
-      expect(capturedResponse).toHaveProperty("stack");
+      expect(capturingJson.mock.calls[0][0]).toHaveProperty("stack");
     });
 
     it("production 환경에서 stack trace를 포함하지 않아야 한다", () => {
-      let capturedResponse: Record<string, unknown> = {};
-      const { host: capturingHost } = createMockHost({
-        onJson: (body) => {
-          capturedResponse = body;
-        },
-      });
+      const { host: capturingHost, mockJson: capturingJson } = createMockHost();
       const exception = new BadRequestException("EMPTY_TEXT");
 
       filter.catch(exception, capturingHost);
 
-      expect(capturedResponse).not.toHaveProperty("stack");
+      expect(capturingJson.mock.calls[0][0]).not.toHaveProperty("stack");
     });
 
     it("ERROR_MESSAGES에 없는 문자열 응답은 원본을 그대로 사용해야 한다", () => {

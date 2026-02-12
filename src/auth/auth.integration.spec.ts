@@ -72,7 +72,12 @@ describe("Auth Integration (Controller + Service)", () => {
         JWT_SECRET: "test-jwt-secret",
         JWT_REFRESH_SECRET: "test-jwt-refresh-secret",
       };
-      return config[key] ?? null;
+      const value = config[key];
+      if (value === undefined) {
+        throw new Error(`설정 키를 찾을 수 없습니다: ${key}`);
+      }
+
+      return value;
     }),
   };
 
