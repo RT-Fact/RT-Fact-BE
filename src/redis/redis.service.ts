@@ -54,4 +54,28 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async del(key: string): Promise<void> {
     await this.client.del(key);
   }
+
+  /**
+   * 원자적 Compare-And-Set (Lua 스크립트)
+   * 기존 값이 expected와 일치할 때만 newValue로 교체
+   * @returns 교체 성공 여부
+   */
+  async compareAndSet(
+    key: string,
+    expected: string,
+    newValue: string,
+    ttlMs: number,
+  ): Promise<boolean> {
+    const script = `
+      local current = redis.call('GET', KEYS[1])
+      if current == ARGV[1] then
+        redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+        return 1
+      else
+        return 0
+      end
+    `;
+    const result = await this.client.eval(script, 1, key, expected, newValue, ttlMs.toString());
+    return result === 1;
+  }
 }

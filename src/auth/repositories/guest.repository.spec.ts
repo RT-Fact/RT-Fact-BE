@@ -3,10 +3,6 @@ import { RedisService } from "../../redis/redis.service";
 import { GUEST_CONFIG } from "../constants";
 import { GuestRepository } from "./guest.repository";
 
-jest.mock("../utils/ip-hash.util", () => ({
-  hashIp: jest.fn().mockReturnValue("hashed-ip"),
-}));
-
 describe("GuestRepository", () => {
   let repository: GuestRepository;
 
@@ -40,19 +36,19 @@ describe("GuestRepository", () => {
         createdAt: "1700000000000",
       });
 
-      const result = await repository.getGuestInfo("192.168.1.1");
+      const result = await repository.getGuestInfo("hashed-ip-value");
 
       expect(result).toEqual({
         remainingUses: 3,
         createdAt: 1700000000000,
       });
-      expect(mockRedisClient.hgetall).toHaveBeenCalledWith("guest:hashed-ip");
+      expect(mockRedisClient.hgetall).toHaveBeenCalledWith("guest:hashed-ip-value");
     });
 
     it("데이터가 없으면 null을 반환해야 한다", async () => {
       mockRedisClient.hgetall.mockResolvedValue(null);
 
-      const result = await repository.getGuestInfo("192.168.1.1");
+      const result = await repository.getGuestInfo("hashed-ip-value");
 
       expect(result).toBeNull();
     });
@@ -60,7 +56,7 @@ describe("GuestRepository", () => {
     it("빈 객체면 null을 반환해야 한다", async () => {
       mockRedisClient.hgetall.mockResolvedValue({});
 
-      const result = await repository.getGuestInfo("192.168.1.1");
+      const result = await repository.getGuestInfo("hashed-ip-value");
 
       expect(result).toBeNull();
     });
@@ -70,19 +66,19 @@ describe("GuestRepository", () => {
     const guestInfo = { remainingUses: 3, createdAt: 1700000000000 };
 
     it("Redis Hash에 게스트 정보를 저장해야 한다", async () => {
-      await repository.setGuestInfo("192.168.1.1", guestInfo);
+      await repository.setGuestInfo("hashed-ip-value", guestInfo);
 
-      expect(mockRedisClient.hset).toHaveBeenCalledWith("guest:hashed-ip", {
+      expect(mockRedisClient.hset).toHaveBeenCalledWith("guest:hashed-ip-value", {
         remainingUses: "3",
         createdAt: "1700000000000",
       });
     });
 
     it("기본 TTL을 설정해야 한다", async () => {
-      await repository.setGuestInfo("192.168.1.1", guestInfo);
+      await repository.setGuestInfo("hashed-ip-value", guestInfo);
 
       expect(mockRedisClient.expire).toHaveBeenCalledWith(
-        "guest:hashed-ip",
+        "guest:hashed-ip-value",
         GUEST_CONFIG.TTL_SECONDS,
       );
     });
@@ -90,9 +86,9 @@ describe("GuestRepository", () => {
     it("커스텀 TTL을 적용해야 한다", async () => {
       const customTtl = 3600;
 
-      await repository.setGuestInfo("192.168.1.1", guestInfo, customTtl);
+      await repository.setGuestInfo("hashed-ip-value", guestInfo, customTtl);
 
-      expect(mockRedisClient.expire).toHaveBeenCalledWith("guest:hashed-ip", customTtl);
+      expect(mockRedisClient.expire).toHaveBeenCalledWith("guest:hashed-ip-value", customTtl);
     });
   });
 
@@ -100,15 +96,19 @@ describe("GuestRepository", () => {
     it("hincrby -1로 차감해야 한다", async () => {
       mockRedisClient.hincrby.mockResolvedValue(2);
 
-      await repository.decrementRemainingUses("192.168.1.1");
+      await repository.decrementRemainingUses("hashed-ip-value");
 
-      expect(mockRedisClient.hincrby).toHaveBeenCalledWith("guest:hashed-ip", "remainingUses", -1);
+      expect(mockRedisClient.hincrby).toHaveBeenCalledWith(
+        "guest:hashed-ip-value",
+        "remainingUses",
+        -1,
+      );
     });
 
     it("차감 후 남은 값을 반환해야 한다", async () => {
       mockRedisClient.hincrby.mockResolvedValue(2);
 
-      const result = await repository.decrementRemainingUses("192.168.1.1");
+      const result = await repository.decrementRemainingUses("hashed-ip-value");
 
       expect(result).toBe(2);
     });

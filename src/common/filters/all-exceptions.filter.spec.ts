@@ -16,7 +16,7 @@ type MockJsonFn = (_body: JsonBody) => void;
 const createMockHost = (): {
   host: ArgumentsHost;
   mockStatus: jest.Mock;
-  mockJson: jest.MockWithArgs<MockJsonFn>;
+  mockJson: jest.Mock<void, [JsonBody]>;
 } => {
   const jsonNoop: MockJsonFn = () => {};
   const mockJson = jest.fn(jsonNoop);
@@ -41,7 +41,7 @@ describe("AllExceptionsFilter", () => {
   let devFilter: AllExceptionsFilter;
   let host: ArgumentsHost;
   let mockStatus: jest.Mock;
-  let mockJson: jest.MockWithArgs<MockJsonFn>;
+  let mockJson: jest.Mock<void, [JsonBody]>;
 
   const mockConfigService = {
     get: jest.fn().mockReturnValue("production"),

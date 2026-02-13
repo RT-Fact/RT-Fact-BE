@@ -108,14 +108,6 @@ export class AuthService {
         secret: this.configService.getOrThrow<string>("JWT_REFRESH_SECRET"),
       });
 
-      // Redis에서 저장된 Refresh Token 확인 (Multi-device 로그인 제한 / 탈취 감지)
-      const cachedRefreshToken = await this.redisService.get(`rt:${payload.id}`);
-
-      if (!cachedRefreshToken || cachedRefreshToken !== refreshToken) {
-        this.logger.warn(`토큰 갱신 실패 - Redis 토큰 불일치 (ID: ${payload.id})`);
-        throw new UnauthorizedException(ERROR_CODES.INVALID_REFRESH_TOKEN);
-      }
-
       const user = await this.prisma.user.findUnique({
         where: { id: payload.id },
       });
@@ -126,7 +118,19 @@ export class AuthService {
       }
 
       const tokens = this.generateUserTokens(user.id, user.email);
-      await this.redisService.set(`rt:${user.id}`, tokens.refreshToken, REFRESH_TOKEN_TTL_MS);
+
+      // 원자적 CAS: 기존 토큰 일치 시에만 새 토큰으로 교체 (Race Condition 방지)
+      const success = await this.redisService.compareAndSet(
+        `rt:${user.id}`,
+        refreshToken,
+        tokens.refreshToken,
+        REFRESH_TOKEN_TTL_MS,
+      );
+
+      if (!success) {
+        this.logger.warn(`토큰 갱신 실패 - Redis 토큰 불일치 (ID: ${payload.id})`);
+        throw new UnauthorizedException(ERROR_CODES.INVALID_REFRESH_TOKEN);
+      }
 
       return tokens;
     } catch {
