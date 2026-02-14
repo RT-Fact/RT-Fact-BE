@@ -4,6 +4,7 @@ import {
   Get,
   Headers,
   Ip,
+  Logger,
   Post,
   Req,
   Res,
@@ -34,6 +35,8 @@ import { hashIp } from "./utils/ip-hash.util";
 
 @Controller("auth")
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
@@ -77,7 +80,7 @@ export class AuthController {
 
       return res.redirect(`${frontendUrl}/auth/callback?code=${authCode}`);
     } catch (error) {
-      console.error("Google OAuth callback failed:", error);
+      this.logger.error("Google OAuth callback failed", error);
       return res.redirect(`${frontendUrl}/login?error=oauth_failed`);
     }
   }
