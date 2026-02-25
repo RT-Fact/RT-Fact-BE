@@ -24,6 +24,10 @@ jest.mock("uuid", () => ({
   v4: () => "mock-uuid",
 }));
 
+jest.mock("./utils/ip-hash.util", () => ({
+  hashIp: jest.fn((ip: string) => `hashed-${ip}`),
+}));
+
 const createUser = (overrides?: Partial<{ id: string; email: string; name: string }>) => ({
   id: "user-123",
   email: "test@example.com",
@@ -90,6 +94,7 @@ describe("Auth Integration (Controller + Service)", () => {
     set: jest.fn(),
     get: jest.fn(),
     del: jest.fn(),
+    compareAndSet: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -215,20 +220,20 @@ describe("Auth Integration (Controller + Service)", () => {
         email: user.email,
         jti: "jti-123",
       });
-      mockRedisService.get.mockResolvedValue("valid-refresh-token");
       mockPrismaService.user.findUnique.mockResolvedValue(user);
       mockJwtService.sign
         .mockReturnValueOnce("new-access-token")
         .mockReturnValueOnce("new-refresh-token");
+      mockRedisService.compareAndSet.mockResolvedValue(true);
 
       await controller.refresh(req, tokenResponse);
 
       expect(mockJwtService.verify).toHaveBeenCalledWith("valid-refresh-token", {
         secret: "test-jwt-refresh-secret",
       });
-      expect(mockRedisService.get).toHaveBeenCalledWith(`rt:${user.id}`);
-      expect(mockRedisService.set).toHaveBeenCalledWith(
+      expect(mockRedisService.compareAndSet).toHaveBeenCalledWith(
         `rt:${user.id}`,
+        "valid-refresh-token",
         "new-refresh-token",
         REFRESH_TOKEN_TTL_MS,
       );
@@ -266,7 +271,7 @@ describe("Auth Integration (Controller + Service)", () => {
       );
     });
 
-    it("Redis에 저장된 토큰과 불일치하면 INVALID_REFRESH_TOKEN UnauthorizedException을 던져야 한다", async () => {
+    it("CAS 실패(동시 갱신) 시 INVALID_REFRESH_TOKEN UnauthorizedException을 던져야 한다", async () => {
       const tokenResponse = createTokenResponse();
       const req = createRequestWithCookies("stolen-token");
       mockJwtService.verify.mockReturnValue({
@@ -274,7 +279,9 @@ describe("Auth Integration (Controller + Service)", () => {
         email: "test@example.com",
         jti: "jti-123",
       });
-      mockRedisService.get.mockResolvedValue("different-stored-token");
+      mockPrismaService.user.findUnique.mockResolvedValue(createUser());
+      mockJwtService.sign.mockReturnValue("new-token");
+      mockRedisService.compareAndSet.mockResolvedValue(false);
 
       await expect(controller.refresh(req, tokenResponse)).rejects.toThrow(
         new UnauthorizedException(ERROR_CODES.INVALID_REFRESH_TOKEN),
@@ -306,13 +313,13 @@ describe("Auth Integration (Controller + Service)", () => {
 
       const result = await controller.guest(undefined, "192.168.1.1");
 
-      expect(mockGuestRepository.getGuestInfo).toHaveBeenCalledWith("192.168.1.1");
+      expect(mockGuestRepository.getGuestInfo).toHaveBeenCalledWith("hashed-192.168.1.1");
       expect(mockGuestRepository.setGuestInfo).toHaveBeenCalledTimes(1);
       const setGuestArg = mockGuestRepository.setGuestInfo.mock.calls[0] as [
         string,
         { remainingUses: number; createdAt: number },
       ];
-      expect(setGuestArg[0]).toBe("192.168.1.1");
+      expect(setGuestArg[0]).toBe("hashed-192.168.1.1");
       expect(setGuestArg[1].remainingUses).toBe(GUEST_CONFIG.INITIAL_USES);
       expect(typeof setGuestArg[1].createdAt).toBe("number");
       expect(result).toEqual({
@@ -337,22 +344,22 @@ describe("Auth Integration (Controller + Service)", () => {
       });
     });
 
-    it("X-Forwarded-For 헤더가 있으면 첫 번째 IP를 사용해야 한다", async () => {
+    it("X-Forwarded-For 헤더가 있으면 첫 번째 IP를 해싱하여 사용해야 한다", async () => {
       mockGuestRepository.getGuestInfo.mockResolvedValue(createGuestInfo());
       mockJwtService.sign.mockReturnValue("guest-token");
 
       await controller.guest("10.0.0.1, 10.0.0.2, 10.0.0.3", "192.168.1.1");
 
-      expect(mockGuestRepository.getGuestInfo).toHaveBeenCalledWith("10.0.0.1");
+      expect(mockGuestRepository.getGuestInfo).toHaveBeenCalledWith("hashed-10.0.0.1");
     });
 
-    it("X-Forwarded-For가 없으면 requestIp를 사용해야 한다", async () => {
+    it("X-Forwarded-For가 없으면 requestIp를 해싱하여 사용해야 한다", async () => {
       mockGuestRepository.getGuestInfo.mockResolvedValue(createGuestInfo());
       mockJwtService.sign.mockReturnValue("guest-token");
 
       await controller.guest(undefined, "127.0.0.1");
 
-      expect(mockGuestRepository.getGuestInfo).toHaveBeenCalledWith("127.0.0.1");
+      expect(mockGuestRepository.getGuestInfo).toHaveBeenCalledWith("hashed-127.0.0.1");
     });
   });
 

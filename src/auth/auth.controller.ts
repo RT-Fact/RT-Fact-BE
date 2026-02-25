@@ -4,6 +4,7 @@ import {
   Get,
   Headers,
   Ip,
+  Logger,
   Post,
   Req,
   Res,
@@ -30,9 +31,12 @@ import {
   TokenResponse,
   XForwardedFor,
 } from "./types/auth.types";
+import { hashIp } from "./utils/ip-hash.util";
 
 @Controller("auth")
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
@@ -75,7 +79,8 @@ export class AuthController {
       await this.redisService.set(authCode, authenticatedUser.id, 60000); // 1분 유효
 
       return res.redirect(`${frontendUrl}/auth/callback?code=${authCode}`);
-    } catch {
+    } catch (error) {
+      this.logger.error("Google OAuth callback failed", error);
       return res.redirect(`${frontendUrl}/login?error=oauth_failed`);
     }
   }
@@ -152,8 +157,9 @@ export class AuthController {
   @Post("guest")
   @Public()
   async guest(@Headers("x-forwarded-for") forwardedFor: XForwardedFor, @Ip() requestIp: string) {
-    // IP 추출: X-Forwarded-For 헤더 또는 @Ip()
-    const ip = forwardedFor ? forwardedFor.split(",")[0].trim() : requestIp;
+    // IP 추출 후 해싱: JWT payload에 원본 IP가 노출되지 않도록 함
+    const rawIp = forwardedFor ? forwardedFor.split(",")[0].trim() : requestIp;
+    const ip = hashIp(rawIp);
 
     // 게스트 정보 조회 또는 생성
     const guestInfo = await this.authService.getOrCreateGuest(ip);
